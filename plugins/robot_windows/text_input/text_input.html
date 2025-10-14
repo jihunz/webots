@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='UTF-8'>
+  <link rel="icon" type="image/png" href="https://cyberbotics.com/assets/images/webots.png">
+
+  <script type="module">
+    import RobotWindow from 'https://cyberbotics.com/wwi/R2025a/RobotWindow.js';
+    // Initialize the robot window
+    window.robotWindow = new RobotWindow();
+  </script>
+
+  <script type="text/javascript">
+    // user input send function (global function)
+    function sendUserMessage() {
+      const userInput = document.getElementById('userInput').value;
+      if (userInput.trim() !== '') {
+        robotWindow.send(userInput);
+        document.getElementById('userInput').value = ''; // initialize input field
+      }
+    }
+
+    window.onload = () => {
+
+      // Receive messages from the controller and show them in the robot window
+      robotWindow.receive = (message) => {
+        document.getElementById('content').innerHTML = message;
+      };
+
+      // Send messages from the robot window to the controller
+      robotWindow.send("Hi?");
+
+      // Enter key also sends a message
+      document.getElementById('userInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          sendUserMessage();
+        }
+      });
+    };
+  </script>
+</head>
+
+<body>
+  <h1 id="content"></h1>
+  <div style="padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
+    <h3>User Message Send</h3>
+    <div style="margin-bottom: 10px;">
+      <input type="text" id="userInput" placeholder="Enter your message..."
+             style="width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+      <button onclick="sendUserMessage()"
+              style="padding: 8px 15px; margin-left: 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+        Send
+      </button>
+    </div>
+    <p style="font-size: 12px; color: #666;">Enter key also sends a message.</p>
+  </div>
+</body>
+
+</html>
