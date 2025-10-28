@@ -9,8 +9,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation -0.2642965978764977 -0.2287806759811614 0.9369133954899521 4.775975114141634
-  position -1.0090568907514776 7.015141634110317 3.8052368556074136
+  orientation -0.25973702661520415 -0.2213086429359508 0.9399782771782232 4.768840950704826
+  position -0.9443648372983966 7.067750340202373 3.7395301293838545
 }
 TexturedBackground {
 }
@@ -20,8 +20,8 @@ RectangleArena {
   floorSize 5 5
 }
 DEF robot2 Robot {
-  translation 0.5748845979586498 0.0005299532658304686 0.05908225988319614
-  rotation 0.0026042523642812675 0.9999594163906508 0.008624583543120314 0.20291533258811273
+  translation 0.5748844913364871 0.0005300627072717379 0.05908238629814232
+  rotation 0.0025983118192265888 0.9999594367603077 0.008624013549277188 0.20291345280715553
   children [
     LED {
       translation 0 0 0.1
@@ -48,7 +48,7 @@ DEF robot2 Robot {
     }
     DEF LW HingeJoint {
       jointParameters HingeJointParameters {
-        position 174.92629822741222
+        position 174.9262996510043
         axis 0 1 0
         anchor 0 0.1 0
       }
@@ -58,8 +58,8 @@ DEF robot2 Robot {
         }
       ]
       endPoint Solid {
-        translation -0.00015295627825761193 -0.08000339999999945 0.0001025393688922417
-        rotation -0.7902036361813368 0.43348017814900247 -0.43321259044227056 4.479843658663106
+        translation -0.00015295613228322156 -0.08000339999999928 0.00010253958663948624
+        rotation -0.7902041373583704 0.4334797210116324 -0.43321213368670924 4.479844275761736
         children [
           DEF LW Shape {
             appearance FlexibleAluminiumDuct {
@@ -73,13 +73,11 @@ DEF robot2 Robot {
         boundingObject USE LW
         physics Physics {
         }
-        linearVelocity 0.059831288582798375 5.4386230596304025e-05 4.121038862748021e-07
-        angularVelocity -0.0009072309323018436 0.9971769721406826 1.824905546089227e-07
       }
     }
     DEF RW HingeJoint {
       jointParameters HingeJointParameters {
-        position 174.92629886664068
+        position 174.92629902697323
         axis 0 1 0
         anchor 0 0.1 0
       }
@@ -89,8 +87,8 @@ DEF robot2 Robot {
         }
       ]
       endPoint Solid {
-        translation -6.6577692584453e-06 0.0799953 1.5975367468869026e-05
-        rotation -0.7901903486059205 0.43356119650519787 -0.43315574780329885 4.479915846635303
+        translation -6.657766697073859e-06 0.0799953 1.597536853632594e-05
+        rotation -0.7901904050519178 0.4335611450206047 -0.4331556963636838 4.47991591614927
         children [
           DEF RW Shape {
             appearance FlexibleAluminiumDuct {
@@ -104,8 +102,6 @@ DEF robot2 Robot {
         boundingObject USE RW
         physics Physics {
         }
-        linearVelocity 0.059829850738268756 5.438604711911004e-05 -1.7431632251227804e-06
-        angularVelocity -0.000907052881178317 0.9971767941487472 1.4709897478747023e-06
       }
     }
     DEF body Pose {
@@ -125,8 +121,5 @@ DEF robot2 Robot {
   physics Physics {
   }
   controller "llm_based"
-  supervisor TRUE
   window "button_input"
-  linearVelocity 0.05975755319128252 5.4332485552321116e-05 -6.805273778957167e-05
-  angularVelocity 0.0007886106682300124 -0.00282144038736805 -0.0006875973296158117
 }
