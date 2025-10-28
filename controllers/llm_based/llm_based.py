@@ -102,8 +102,7 @@ stop [속도] [지속시간] : 정지
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=1000,
-            temperature=0.1,
+            max_completion_tokens=1000,
             timeout=10
         )
 
@@ -133,7 +132,7 @@ right_wheel = robot.getDevice("MRW")
 # 예시: 사용자 명령을 LLM으로 해석 후 제어
 # ==========================================================
 
-user_input = "왼쪽으로 천천히 돌아줘"  # ← 테스트용 자연어 명령
+user_input = "계속 움직이되 장애물 만나면 회피 기동"  # ← 테스트용 자연어 명령
 command = parse_natural_language_with_llm(user_input)
 
 try:
