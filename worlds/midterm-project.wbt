@@ -1,0 +1,125 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/BrushedAluminium.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/FlexibleAluminiumDuct.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation -0.21618117437322576 -0.23265806520317514 0.9482277809379602 4.732697538771487
+  position -0.11231428754866879 1.4274647394315898 0.8378179764653156
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+}
+DEF robot2 Robot {
+  translation 0.23795140025542522 0.00022212939986970137 0.059056612701022596
+  rotation 0.005788211803664698 -0.9999708699601981 0.0049755236066633445 0.19566054033295083
+  children [
+    LED {
+      translation 0 0 0.1
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cone {
+            bottomRadius 0.05
+            height 0.1
+          }
+        }
+      ]
+    }
+    Gyro {
+    }
+    Accelerometer {
+      name "gps"
+    }
+    DistanceSensor {
+      translation 0.07 0 -5.22482e-07
+      rotation 0 -1 0 -5.307179586466759e-06
+      name "DS_0"
+    }
+    DEF LW HingeJoint {
+      jointParameters HingeJointParameters {
+        position 169.71086936989715
+        axis 0 1 0
+        anchor 0 0.1 0
+      }
+      device [
+        RotationalMotor {
+          name "MLW"
+        }
+      ]
+      endPoint Solid {
+        translation 1.609805146216581e-05 -0.08000339999999989 0.00018344153829043448
+        rotation 0.9989482290037651 0.032471968876096435 -0.03237293634428155 1.571097408661905
+        children [
+          DEF LW Shape {
+            appearance FlexibleAluminiumDuct {
+            }
+            geometry Cylinder {
+              height 0.05
+              radius 0.06
+            }
+          }
+        ]
+        boundingObject USE LW
+        physics Physics {
+        }
+      }
+    }
+    DEF RW HingeJoint {
+      jointParameters HingeJointParameters {
+        position 169.71086982530855
+        axis 0 1 0
+        anchor 0 0.1 0
+      }
+      device [
+        RotationalMotor {
+          name "MRW"
+        }
+      ]
+      endPoint Solid {
+        translation 1.0786703209382161e-05 0.0799953 1.353459608325275e-05
+        rotation 0.9989480612744289 0.03242908482461209 -0.03242106311486079 1.5709509946792197
+        children [
+          DEF RW Shape {
+            appearance FlexibleAluminiumDuct {
+            }
+            geometry Cylinder {
+              height 0.05
+              radius 0.06
+            }
+          }
+        ]
+        boundingObject USE RW
+        physics Physics {
+        }
+      }
+    }
+    DEF body Pose {
+      children [
+        Shape {
+          appearance BrushedAluminium {
+          }
+          geometry Box {
+            size 0.1 0.1 0.1
+          }
+        }
+      ]
+    }
+  ]
+  name "robot2"
+  boundingObject USE body
+  physics Physics {
+  }
+  controller "llm_based"
+  supervisor TRUE
+  window "button_input"
+}

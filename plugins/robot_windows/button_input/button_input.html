@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='UTF-8'>
+  <link rel="icon" type="image/png" href="https://cyberbotics.com/assets/images/webots.png">
+
+  <script type="module">
+    import RobotWindow from 'https://cyberbotics.com/wwi/R2025a/RobotWindow.js';
+    // Initialize the robot window
+    window.robotWindow = new RobotWindow();
+  </script>
+
+  <script type="text/javascript">
+    // user input send function (global function)
+    function sendUserMessage() {
+      const userInput = document.getElementById('userInput').value;
+      if (userInput.trim() !== '') {
+        robotWindow.send(userInput);
+        document.getElementById('userInput').value = ''; // initialize input field
+      }
+    }
+
+    // send command function
+    function sendCommand(command) {
+      robotWindow.send(command);
+    }
+
+    // send FL command (Forward then Right with delay)
+    function sendFLCommand() {
+      // First send forward command
+      robotWindow.send('forward 1 3');
+      
+      // Then send right command after 3.5 seconds delay
+      setTimeout(() => {
+        robotWindow.send('right 1 2');
+      }, 3500);
+    }
+
+    window.onload = () => {
+
+      // Receive messages from the controller and show them in the robot window
+      robotWindow.receive = (message) => {
+        document.getElementById('content').innerHTML = message;
+      };
+
+      // Send messages from the robot window to the controller
+      robotWindow.send("Hi?");
+
+      // Enter key also sends a message
+      document.getElementById('userInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          sendUserMessage();
+        }
+      });
+    };
+  </script>
+</head>
+
+<body>
+  <h1 id="content"></h1>
+  <div style="padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
+    <h3>Robot Control</h3>
+    
+    <!-- Movement Control Buttons -->
+    <div style="margin-bottom: 15px;">
+      <h4>Movement Control</h4>
+      <button onclick="sendCommand('forward 1 5')" 
+              style="padding: 10px 20px; margin: 5px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        Forward
+      </button>
+      <button onclick="sendCommand('backward 1 5')" 
+              style="padding: 10px 20px; margin: 5px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        Backward
+      </button>
+      <button onclick="sendCommand('left 1 5')" 
+              style="padding: 10px 20px; margin: 5px; background-color: #ffc107; color: black; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        Left
+      </button>
+      <button onclick="sendCommand('right 1 5')" 
+              style="padding: 10px 20px; margin: 5px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        Right
+      </button>
+      <button onclick="sendCommand('stop')" 
+              style="padding: 10px 20px; margin: 5px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        Stop
+      </button>
+    </div>
+
+    <!-- Complex Movement Patterns -->
+    <div style="margin-bottom: 15px;">
+      <h4>Complex Patterns</h4>
+      <button onclick="sendFLCommand()" 
+              style="padding: 10px 20px; margin: 5px; background-color: #6f42c1; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        FL (Forward→Right)
+      </button>
+    </div>
+
+    <!-- User Message Input -->
+    <div style="margin-bottom: 10px;">
+      <h4>Custom Message</h4>
+      <input type="text" id="userInput" placeholder="Enter your message..." 
+             style="width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+      <button onclick="sendUserMessage()" 
+              style="padding: 8px 15px; margin-left: 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+        Send
+      </button>
+    </div>
+    <p style="font-size: 12px; color: #666;">Enter key also sends a message.</p>
+  </div>
+</body>
+
+</html>

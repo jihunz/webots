@@ -4,39 +4,251 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/gctronic/e-puck/protos/E-puck.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/balls/protos/SoccerBall.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/lights/protos/FloorLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/BrushedAluminium.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/BakelitePlastic.proto"
 
 WorldInfo {
+  contactProperties [
+    ContactProperties {
+      material2 "dumbbell"
+      coulombFriction [
+        0
+      ]
+    }
+  ]
 }
 Viewpoint {
-  orientation -0.2143052675291076 -0.1694315386421382 0.9619595656900737 4.311507119330189
-  position -0.2814993374741096 0.6784839268587156 0.6495434572398447
+  orientation 0.6133724847496363 -0.4418840731808527 -0.6546087845584994 5.312773356282902
+  position -2.8447052725203936 -1.134071624299875 1.968611952155359
 }
 TexturedBackground {
 }
 TexturedBackgroundLight {
 }
 RectangleArena {
+  translation -0.277776 -0.153897 2.78632e-14
+  rotation 0 0 -1 -5.307179586466759e-06
   floorSize 10 10
 }
+DEF basketball Solid {
+  translation -3.5595474202124313 1.2251287510581075 0.09342527489459512
+  rotation -0.37794408956479575 0.849268907960281 0.36864696816193854 1.9490488288380012
+  children [
+    DEF bstball Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "../../../Downloads/basketball.jpg"
+          ]
+          repeatS FALSE
+          repeatT FALSE
+        }
+      }
+      geometry Sphere {
+        radius 0.1
+        subdivision 5
+      }
+    }
+  ]
+  name "solid(2)"
+  boundingObject USE bstball
+  physics Physics {
+  }
+  linearVelocity 0 0 1.0856293312728803e-16
+}
+SoccerBall {
+  translation -0.7129506573197845 0.8808971228544946 0.11205824000002784
+  rotation -0.4250697974991355 0.7989899796998006 -0.4253594710281601 0.9251378823074828
+}
 E-puck {
-  hidden position_0_0 62.90912156844732
-  hidden position_0_1 125.75871879204077
-  hidden linearVelocity_0 -0.0001568429641515908 -5.118916770876614e-05 -2.7368596041000058e-09
-  hidden angularVelocity_0 0.0034126028638103993 -0.010456172126488498 -4.497176248223184e-11
-  hidden translation_1 0 0.026 0.02
-  hidden rotation_1 0 1 0 0.07726849665145336
-  hidden linearVelocity_1 -0.00020912339397189167 -6.825204141873197e-05 -2.392290810887397e-11
-  hidden angularVelocity_1 0.0034126028626218744 -0.01045617212463986 1.0154735212589761e-10
-  hidden translation_2 0 -0.026 0.02
-  hidden rotation_2 0 1 0 0.09501264844903537
-  hidden linearVelocity_2 -0.00020912339236580055 -6.825204090258771e-05 -2.3788260275441916e-11
-  hidden angularVelocity_2 0.0034126028634997915 -0.010456172124294725 -1.9149054366736075e-10
-  translation -0.5687327351496596 -0.3915640958554009 -6.396255414700854e-05
-  rotation -0.00010335163865186285 -1.643761356026585e-05 0.9999999945241218 -2.8261202391310474
+  hidden position_0_0 62.90912156041423
+  hidden position_0_1 125.75871878400768
+  hidden rotation_1 0 1 0 0.07726848861836437
+  hidden rotation_2 0 0.9999999999999999 0 0.09501264041595395
+  translation -0.5687327350485006 -0.39156409582238905 -6.39619955747437e-05
+  rotation -1.1566746237554813e-09 1.0638374577842557e-09 1 -2.8261202408528825
   controller "text_input"
   controllerArgs [
     ""
   ]
   window "text_input"
   supervisor TRUE
+}
+FloorLight {
+  translation -0.395312 -0.538564 1.65174e-15
+  scale 0.3
+}
+DEF dumbbell Solid {
+  translation 0.012396445330976029 0.06087157229941355 0.09216044419338087
+  rotation -0.2039227556140677 0.7047077582183028 0.6795605088950502 -2.6069237895071633
+  children [
+    DEF G Group {
+      children [
+        Shape {
+          appearance BrushedAluminium {
+          }
+          geometry Cylinder {
+            height 0.2
+            radius 0.05
+          }
+        }
+        Pose {
+          translation 0 0 -0.18
+          children [
+            Shape {
+              appearance BrushedAluminium {
+              }
+              geometry Sphere {
+                radius 0.1
+              }
+            }
+          ]
+        }
+        Pose {
+          translation 0 0 0.13
+          children [
+            Shape {
+              appearance BrushedAluminium {
+              }
+              geometry Sphere {
+                radius 0.1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+  name "solid(3)"
+  boundingObject USE G
+  physics Physics {
+  }
+  linearVelocity -3.8300743246421303e-16 1.2802416343113416e-16 4.571070868517509e-16
+  angularVelocity -1.2463961281438689e-15 -3.64177717286562e-15 2.2368012747007766e-16
+}
+DEF car Solid {
+  translation -0.682390827653193 0.25924056298271203 0.024411400000018915
+  rotation 2.2968104770840924e-07 -0.7193147798707531 0.6946842789781826 9.176633597399827e-07
+  children [
+    Shape {
+      appearance BrushedAluminium {
+      }
+      geometry Box {
+        size 0.1 0.3 0.05
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position 0.2523930122983631
+      }
+      endPoint Solid {
+        translation -0.10000000000040399 0.0968317352696152 0.02497228553026011
+        rotation 0.12487672881116016 -0.9842822953822651 -0.1248766014850004 1.5866371821625174
+        children [
+          DEF wheel Shape {
+            appearance BakelitePlastic {
+            }
+            geometry Cylinder {
+              height 0.1
+              radius 0.05
+            }
+          }
+        ]
+        name "solid(3)"
+        boundingObject USE wheel
+        physics Physics {
+        }
+        linearVelocity 4.888677970906136e-16 -8.467566567426543e-17 2.880792796053921e-16
+        angularVelocity 6.9742114382538705e-15 -4.160400756729962e-15 3.5107802262289885e-16
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position -0.20963361330846375
+      }
+      endPoint Solid {
+        translation -0.10000000000041631 -0.11737284590279956 0.02497228553026047
+        rotation -0.1040571135434405 -0.9891128632883828 0.10405700744526851 1.5817419238923829
+        children [
+          DEF wheel Shape {
+            appearance BakelitePlastic {
+            }
+            geometry Cylinder {
+              height 0.1
+              radius 0.05
+            }
+          }
+        ]
+        name "solid(1)"
+        boundingObject USE wheel
+        physics Physics {
+        }
+        linearVelocity 6.394928777796932e-16 5.413061283136317e-17 -1.438704395400395e-16
+        angularVelocity -1.4859575370756298e-15 -7.8883547734709375e-16 -1.0897386278419468e-15
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position -0.20963418787427202
+      }
+      endPoint Solid {
+        translation 0.09999999999958364 -0.11737287399157367 0.024972153512497056
+        rotation -0.10405739462212679 -0.9891128041480188 0.10405728852366829 1.5817419836801234
+        children [
+          DEF wheel Shape {
+            appearance BakelitePlastic {
+            }
+            geometry Cylinder {
+              height 0.1
+              radius 0.05
+            }
+          }
+        ]
+        name "solid(2)"
+        boundingObject USE wheel
+        physics Physics {
+        }
+        linearVelocity 5.958668398245707e-16 9.688567822815054e-17 1.4259381330443962e-16
+        angularVelocity -1.711419830484657e-15 -3.839837498340532e-15 -4.116488868321909e-16
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position 0.2523936881323523
+      }
+      endPoint Solid {
+        translation 0.09999999999959586 0.09683176931688953 0.024972153512498645
+        rotation 0.12487705623046247 -0.9842822123023087 -0.12487692890396887 1.5866372665585657
+        children [
+          DEF wheel Shape {
+            appearance BakelitePlastic {
+            }
+            geometry Cylinder {
+              height 0.1
+              radius 0.05
+            }
+          }
+        ]
+        name "solid(4)"
+        boundingObject USE wheel
+        physics Physics {
+        }
+        linearVelocity 6.639740824753532e-16 -1.6363477490433416e-16 1.2605645245651155e-17
+        angularVelocity -1.0250001470185772e-15 3.286109318977791e-16 4.0759952172658937e-16
+      }
+    }
+  ]
+  boundingObject Shape {
+    appearance BrushedAluminium {
+    }
+    geometry Box {
+      size 0.1 0.3 0.05
+    }
+  }
+  physics Physics {
+  }
+  linearVelocity -1.4545380063396378e-15 1.9759738890849507e-17 -1.3849601279245215e-16
+  angularVelocity -9.139871394379662e-16 -3.784665695101368e-15 2.390240448049068e-16
 }
