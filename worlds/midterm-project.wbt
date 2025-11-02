@@ -5,18 +5,19 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/BrushedAluminium.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/FlexibleAluminiumDuct.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/neuronics/ipr/protos/IprHd6ms180.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/fruits/protos/Apple.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/fruits/protos/Orange.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/kitchen/breakfast/protos/BiscuitBox.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/drinks/protos/Can.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/animals/protos/Cat.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/universal_robots/protos/UR10e.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/robotiq/protos/Robotiq3fGripper.proto"
 
 WorldInfo {
 }
 Viewpoint {
-  orientation 0.08256811783576593 0.9951529960469553 0.05341367218070474 0.6727693064427914
-  position -2.6808159640905456 -0.47954087690229963 2.101049408512335
+  orientation 0.07247244037563676 0.9940061788897243 0.08185023955401258 0.6741222315444958
+  position -3.992102506470247 -0.6485558238328817 3.1445096817300704
 }
 TexturedBackground {
 }
@@ -27,8 +28,8 @@ RectangleArena {
   floorSize 5 5
 }
 DEF robot2 Robot {
-  translation 0.5782288597413338 0.0015381370257459854 0.05908238617555525
-  rotation 0.02569908847696934 0.9753566303110256 -0.21913238135833402 0.2079783931377369
+  translation 0.5782289548118299 0.0015382903824786463 0.059082385897947065
+  rotation 0.025699005382804535 0.9753568499821147 -0.2191314133466519 0.20797833471390795
   children [
     LED {
       translation 0 0 0.1
@@ -55,7 +56,7 @@ DEF robot2 Robot {
     }
     DEF LW HingeJoint {
       jointParameters HingeJointParameters {
-        position 174.9263039245491
+        position 174.926308183908
         axis 0 1 0
         anchor 0 0.1 0
       }
@@ -65,8 +66,8 @@ DEF robot2 Robot {
         }
       ]
       endPoint Solid {
-        translation -0.00015295569407430842 -0.08000339999999903 0.00010254024030343186
-        rotation -0.7902056418624192 0.43347834870743196 -0.43321076252867985 4.479846128253807
+        translation -0.00015295525731723732 -0.08000339999999895 0.00010254089179569705
+        rotation -0.7902071413697676 0.433476980953953 -0.43320939591757046 4.479847974590752
         children [
           DEF LW Shape {
             appearance FlexibleAluminiumDuct {
@@ -80,13 +81,11 @@ DEF robot2 Robot {
         boundingObject USE LW
         physics Physics {
         }
-        linearVelocity 1.327913837530358e-07 -6.735315013805242e-08 -6.14472008109588e-08
-        angularVelocity 8.204119897759739e-07 3.784246382286127e-06 2.6439633957820874e-06
       }
     }
     DEF RW HingeJoint {
       jointParameters HingeJointParameters {
-        position 174.92629918736952
+        position 174.92629966731394
         axis 0 1 0
         anchor 0 0.1 0
       }
@@ -96,8 +95,8 @@ DEF robot2 Robot {
         }
       ]
       endPoint Solid {
-        translation -6.657764134683816e-06 0.0799953 1.5975369604206858e-05
-        rotation -0.7901904615203551 0.43356109351553473 -0.43315564490360964 4.479915985690868
+        translation -6.65775646739359e-06 0.07999530000000002 1.5975372799561775e-05
+        rotation -0.7901906304875209 0.4335609393998997 -0.43315549092261385 4.479916193776058
         children [
           DEF RW Shape {
             appearance FlexibleAluminiumDuct {
@@ -111,8 +110,6 @@ DEF robot2 Robot {
         boundingObject USE RW
         physics Physics {
         }
-        linearVelocity -5.187880530457495e-07 -1.827210932925065e-08 3.948870516951524e-08
-        angularVelocity 2.533585455092933e-07 -8.832792129119774e-06 2.597641818751121e-06
       }
     }
     DEF body Pose {
@@ -131,54 +128,73 @@ DEF robot2 Robot {
   boundingObject USE body
   physics Physics {
   }
-  controller "llm_based"
+  recognitionColors [
+    0 0 0
+  ]
+  controller "<none>"
   window "button_input"
-  linearVelocity -2.885319211673524e-07 -6.321333877357807e-08 -7.422165344905812e-08
-  angularVelocity 1.7900281840538172e-07 -1.0437086365777999e-05 2.600572542043113e-06
-}
-IprHd6ms180 {
-  hidden position_0_0 1.1595125991735417e-06
-  hidden rotation_1 0 0 1 0.12479215947603918
-  hidden position_1_0 3.4602019711307895e-07
-  hidden rotation_2 -1 0 0 0.5977753460201952
-  hidden position_2_0 -9.562724226395975e-07
-  hidden rotation_3 1 0 0 2.221800956272422
-  hidden position_3_0 3.497249639646727e-07
-  hidden rotation_4 -1 0 0 2.033310349724964
-  hidden position_4_0 -3.750889108391916e-07
-  hidden rotation_5 0 0 0.9999999999999999 2.993189625695819
-  hidden position_5_0 -3.8891371606408585e-08
-  hidden position_5_1 6.160952102967308e-08
-  hidden rotation_6 0 -1 0 4.2146848510894035e-08
-  hidden translation_11 0.005700230753625746 -1.5434974405259538e-06 0.03249640223083666
-  hidden rotation_11 9.309038338926102e-16 1 -1.601752593286357e-15 0.19199999999999623
-  hidden translation_12 2.307528878531251e-07 -1.5434974451888905e-06 0.08369640223076669
-  hidden rotation_12 0.9395439155934868 -0.3165329733423601 0.13062965765209553 3.6152095242066914e-15
-  hidden rotation_14 0 -1 0 5.960464477539063e-08
-  hidden translation_19 -0.007699769246421906 -1.543496830125335e-06 0.03249640223045441
-  hidden rotation_19 -4.220535378583186e-15 -1 -8.605619821974285e-16 -2.949685307179575
-  hidden translation_20 2.3075283883677855e-07 -1.543497221812018e-06 0.08369640223062702
-  hidden rotation_20 -2.7702747886006166e-15 -1 -1.2895326062897594e-15 3.141500000000006
-  translation -0.36593 -0.678272 -5.63172e-15
-  controller "vlm_controller"
-  supervisor TRUE
 }
 Apple {
-  translation 0.02996080511528203 -0.03733659004450169 0.0497645599999917
-  rotation -0.7355900851124505 0.44884164889618056 -0.5073937336038116 0.8915534984633758
+  translation 0.08543338230550421 -1.8939183514637998 0.0497645599999917
+  rotation 0.8902470772205905 0.3674813499222646 -0.2691051819633096 -2.5785819891909503
 }
 BiscuitBox {
-  translation -0.1975387404270684 -0.3709416831353511 -0.00015696000005363878
-  rotation -1.609185084155374e-10 -2.836908253508198e-10 -1 0.0020212078647418555
+  translation -0.1975387404270684 -0.3709416831353511 -0.00015696000000830004
+  rotation -5.9477172972478134e-15 1.7592512640853427e-14 -1 0.0020212078647418616
+}
+UR10e {
+  hidden translation_1 0 0 0.181
+  hidden rotation_1 0 0 -1 6.933704211580152e-05
+  hidden translation_2 0 0.176 0
+  hidden rotation_2 0 0.9999999999999999 0 1.570694506541134
+  hidden translation_3 0 -0.137 0.613
+  hidden rotation_3 0 -0.9999999999999999 0 5.8129351512655076e-05
+  hidden translation_4 0 0 0.571
+  hidden rotation_4 0 0.9999999999999999 0 1.5707769084549654
+  hidden translation_5 0 0.135 0
+  hidden rotation_5 0 0 1 3.3178498674498206e-05
+  hidden translation_6 0 0 0.12
+  hidden rotation_6 0 1 0 6.665734289930825e-06
+  hidden translation_8 -0.0455 0.0214 0.036
+  hidden rotation_8 0.7068252250603847 0.7073882252405277 3.064801628222052e-06 3.141598129704522
+  hidden translation_9 0.02 0 0
+  hidden rotation_9 0 0 -1 2.1283115233608642e-07
+  hidden translation_10 0.05 -0.028 0
+  hidden rotation_10 0 0 -1 0.5200000309972507
+  hidden translation_11 0.039 0 0
+  hidden translation_12 -0.0455 0.0214 -0.036
+  hidden rotation_12 0.7068252250603847 0.7073882252405277 3.0648016297703597e-06 3.141598129704525
+  hidden translation_13 0.02 0 0
+  hidden rotation_13 0 0 -1 2.086162567138673e-07
+  hidden translation_14 0.05 -0.028 0
+  hidden rotation_14 0 0 -1 0.5200000309972576
+  hidden translation_15 0.039 0 0
+  hidden translation_16 0.02 0 0
+  hidden rotation_16 0 0 1 1.976862424823881e-07
+  hidden translation_17 0.05 -0.028 0
+  hidden rotation_17 0 0 -1 0.5199999690015773
+  hidden translation_18 0.039 0 0
+  translation -1.56417 0.529448 0.61
+  rotation 4.66309e-07 -7.19235e-09 1 -1.5707953071795862
+  controller "vlm_controller"
+  selfCollision FALSE
+  toolSlot [
+    Robotiq3fGripper {
+    }
+    DistanceSensor {
+      translation 0 0.1 0
+      rotation 0 0 1 1.570796
+    }
+  ]
 }
 Can {
-  translation -0.51504 -0.368173 0.0609626599999917
-  rotation -0.1549235083370422 -0.5669648285538016 0.8090423905751173 2.2392761895160367e-16
+  translation -0.51504 -0.368173 0.06096265999999172
+  rotation 0.0902506829703461 -0.9422223527823084 0.3226016927121704 5.221452889155254e-16
 }
 Cat {
   translation 0.023527 0.315267 0.01
 }
 Orange {
-  translation -0.3712935482859985 -0.0828688109004673 0.0497645599999917
-  rotation 0.940119256322704 0.31985482010273175 0.11776535122138003 1.267269156758256
+  translation -0.3712935482859985 -0.0828688109004673 0.04976455999999172
+  rotation 0.940119256322704 0.3198548201027317 0.11776535122138006 1.267269156758256
 }
