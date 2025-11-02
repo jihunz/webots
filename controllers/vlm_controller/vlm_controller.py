@@ -1,36 +1,53 @@
 from controller import Robot
 from openai import OpenAI
 import os
-import time
 import dotenv
 import json
 import threading
+import time
 from queue import Queue
 
+
 # =====================================================
-#  조인트 및 그리퍼 제어 함수
+#  로봇 동작 함수
 # =====================================================
 
-def move_joints(targets: dict, speed=1.0, duration=3.0):
-    """주어진 조인트 각도로 이동"""
+def move_joints(targets, speed=1.0, duration=3.0):
+    """주어진 조인트 각도로 이동 (dict 또는 list 모두 허용)"""
+    # 리스트 형태라면 dict으로 변환
+    if isinstance(targets, list):
+        converted = {}
+        for t in targets:
+            if isinstance(t, dict):
+                joint = t.get("joint")
+                angle = t.get("angle")
+                if joint is not None and angle is not None:
+                    converted[joint] = angle
+        targets = converted
+
+    elif not isinstance(targets, dict):
+        print("⚠️ move_joints(): targets 형식이 잘못되었습니다.", type(targets))
+        return
+
     for name, angle in targets.items():
         m = motors.get(name)
         if not m:
+            print(f"⚠️ 모터 '{name}' 없음, 무시")
             continue
         m.setVelocity(abs(speed))
         m.setPosition(angle)
+
     steps = int(duration * 1000 / robot.getBasicTimeStep())
     for _ in range(steps):
         if robot.step(timestep) == -1:
             break
-    print(f"조인트 이동 완료 → {targets}")
+    print(f"🦾 조인트 이동 완료 → {targets}")
 
 
 def open_gripper(speed=0.5, duration=2.0):
-    """3-finger 그리퍼 열기 (velocity-mode)"""
+    """그리퍼 열기"""
     for name in GRIPPER_NAMES:
-        m = motors[name]
-        m.setVelocity(-abs(speed))
+        motors[name].setVelocity(-abs(speed))
     steps = int(duration * 1000 / robot.getBasicTimeStep())
     for _ in range(steps):
         if robot.step(timestep) == -1:
@@ -41,10 +58,9 @@ def open_gripper(speed=0.5, duration=2.0):
 
 
 def close_gripper(speed=0.5, duration=2.0):
-    """3-finger 그리퍼 닫기 (velocity-mode)"""
+    """그리퍼 닫기"""
     for name in GRIPPER_NAMES:
-        m = motors[name]
-        m.setVelocity(abs(speed))
+        motors[name].setVelocity(abs(speed))
     steps = int(duration * 1000 / robot.getBasicTimeStep())
     for _ in range(steps):
         if robot.step(timestep) == -1:
@@ -55,29 +71,30 @@ def close_gripper(speed=0.5, duration=2.0):
 
 
 # =====================================================
-#  명령 큐 / 실행 스레드
+#  명령 큐 / 스레드
 # =====================================================
 
 command_queue = Queue()
 is_executing = False
 
+
 def execute_command_queue():
-    """큐에 쌓인 명령을 순차적으로 실행"""
+    """큐에 쌓인 명령 순차 실행"""
     global is_executing
     while True:
         if not command_queue.empty():
             is_executing = True
             cmd = command_queue.get()
             try:
-                cmd_type = cmd.get("type")
-                if cmd_type == "move_joints":
-                    move_joints(cmd["targets"], cmd.get("speed",1.0), cmd.get("duration",3.0))
-                elif cmd_type == "open_gripper":
-                    open_gripper(cmd.get("speed",0.5), cmd.get("duration",2.0))
-                elif cmd_type == "close_gripper":
-                    close_gripper(cmd.get("speed",0.5), cmd.get("duration",2.0))
+                t = cmd.get("type")
+                if t == "move_joints":
+                    move_joints(cmd.get("targets", {}), cmd.get("speed", 1.0), cmd.get("duration", 3.0))
+                elif t == "open_gripper":
+                    open_gripper(cmd.get("speed", 0.5), cmd.get("duration", 2.0))
+                elif t == "close_gripper":
+                    close_gripper(cmd.get("speed", 0.5), cmd.get("duration", 2.0))
             except Exception as e:
-                print(f"명령 실행 오류: {e}")
+                print(f"명령 오류: {e}")
             finally:
                 command_queue.task_done()
                 is_executing = False
@@ -86,30 +103,30 @@ def execute_command_queue():
 
 
 # =====================================================
-#  Function-Calling 스키마 정의
+#  LLM Function 정의
 # =====================================================
 
 functions = [
     {
         "name": "move_arm",
-        "description": "UR10e 팔의 여러 조인트를 움직입니다.",
+        "description": "UR10e의 팔 조인트를 제어합니다.",
         "parameters": {
             "type": "object",
             "properties": {
                 "targets": {
                     "type": "object",
-                    "description": "각 조인트 이름 → 라디안 값",
-                    "additionalProperties": {"type": "number"}
+                    "additionalProperties": {"type": "number"},
+                    "description": "조인트 이름 → 라디안 각도"
                 },
                 "speed": {"type": "number", "default": 1.0},
                 "duration": {"type": "number", "default": 3.0}
             },
-            "required": ["targets"]
+            "required": []
         }
     },
     {
         "name": "control_gripper",
-        "description": "3-Finger 그리퍼를 열거나 닫습니다.",
+        "description": "UR10e 그리퍼를 열거나 닫습니다.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -123,48 +140,68 @@ functions = [
 ]
 
 
-def process_function_call(function_name, arguments):
-    """LLM 함수 호출 → 큐 적재"""
-    if function_name == "move_arm":
+# =====================================================
+#  Function 처리 로직
+# =====================================================
+
+def process_function_call(fn_name, args):
+    """LLM 함수 호출 → 실제 큐 명령으로 변환"""
+    if fn_name == "move_arm":
+        raw_targets = args.get("targets")
+
+        # 리스트로 왔으면 dict으로 변환
+        if isinstance(raw_targets, list):
+            temp = {}
+            for t in raw_targets:
+                if isinstance(t, dict) and "joint" in t and "angle" in t:
+                    temp[t["joint"]] = t["angle"]
+            targets = temp
+        else:
+            targets = raw_targets or {"shoulder_lift_joint": -1.0, "elbow_joint": 1.5}
+
         cmd = {
             "type": "move_joints",
-            "targets": arguments.get("targets", {}),
-            "speed": arguments.get("speed", 1.0),
-            "duration": arguments.get("duration", 3.0)
+            "targets": targets,
+            "speed": args.get("speed", 1.0),
+            "duration": args.get("duration", 3.0)
         }
         command_queue.put(cmd)
-        return f"팔 이동 명령 추가 ({len(cmd['targets'])} joints)."
-    elif function_name == "control_gripper":
-        act = arguments.get("action")
-        cmd = {"type": "open_gripper" if act=="open" else "close_gripper",
-               "speed": arguments.get("speed",0.5),
-               "duration": arguments.get("duration",2.0)}
-        command_queue.put(cmd)
-        return f"그리퍼 {act} 명령 추가."
-    return "알 수 없는 함수 요청."
+        return f"팔 이동 명령 추가됨 → {targets}"
+
+    elif fn_name == "control_gripper":
+        act = args.get("action")
+        cmd_type = "open_gripper" if act == "open" else "close_gripper"
+        command_queue.put({
+            "type": cmd_type,
+            "speed": args.get("speed", 0.5),
+            "duration": args.get("duration", 2.0)
+        })
+        return f"그리퍼 {act} 명령 추가됨"
+
+    return "알 수 없는 함수"
 
 
 # =====================================================
-#  LLM Function-Calling 래퍼
+#  LLM 처리
 # =====================================================
 
-def handle_llm_function_calling(user_message):
+def handle_llm_command(user_message):
+    """자연어 명령을 LLM Function Calling으로 처리"""
     if client is None:
-        return "OpenAI 클라이언트 없음"
+        return "❌ OpenAI 클라이언트 없음"
+
     messages = [
         {
             "role": "system",
             "content": (
-                "너는 UR10e 산업용 로봇팔 제어 에이전트야.\n"
-                "사용자의 자연어 명령을 해석해 move_arm 또는 control_gripper 함수를 호출해야 해.\n\n"
-                "예시:\n"
-                " - '팔을 들어올려' → move_arm(targets={'shoulder_lift_joint': -1.2})\n"
-                " - '그리퍼를 열어' → control_gripper(action='open')"
+                "너는 UR10e 산업용 로봇팔 제어 에이전트야. "
+                "자연어 명령을 해석해 move_arm 또는 control_gripper 함수를 호출해야 해. "
+                "만약 사용자가 단순히 '팔을 들어올려'라고 말하면, "
+                "shoulder_lift_joint: -1.0, elbow_joint: 1.5 로 설정해."
             )
         },
         {"role": "user", "content": user_message}
     ]
-    print(f"LLM 요청: {user_message}")
 
     try:
         resp = client.chat.completions.create(
@@ -179,9 +216,8 @@ def handle_llm_function_calling(user_message):
         if hasattr(msg, "function_call") and msg.function_call:
             fn = msg.function_call.name
             args = json.loads(msg.function_call.arguments)
-            result = process_function_call(fn, args)
-            return result
-        return msg.content or "함수 호출 없음"
+            return process_function_call(fn, args)
+        return msg.content or "명령을 인식하지 못했습니다."
     except Exception as e:
         return f"LLM 오류: {e}"
 
@@ -193,15 +229,14 @@ def handle_llm_function_calling(user_message):
 dotenv.load_dotenv()
 try:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    print("✅ OpenAI 클라이언트 초기화 완료")
+    print("✅ OpenAI 연결 완료")
 except Exception as e:
-    print(f"❌ OpenAI 초기화 실패: {e}")
+    print(f"❌ OpenAI 연결 실패: {e}")
     client = None
 
 robot = Robot()
 timestep = int(robot.getBasicTimeStep())
 
-# UR10e 조인트 및 그리퍼 초기화
 JOINT_NAMES = [
     "shoulder_pan_joint",
     "shoulder_lift_joint",
@@ -210,6 +245,7 @@ JOINT_NAMES = [
     "wrist_2_joint",
     "wrist_3_joint"
 ]
+
 GRIPPER_NAMES = [
     "finger_1_joint_1",
     "finger_2_joint_1",
@@ -218,28 +254,32 @@ GRIPPER_NAMES = [
 
 motors = {}
 for name in JOINT_NAMES + GRIPPER_NAMES:
-    m = robot.getDevice(name)
-    if name in GRIPPER_NAMES:
-        m.setPosition(float('inf'))  # velocity-mode
-        m.setVelocity(0.0)
-    else:
-        m.setVelocity(1.0)
-    motors[name] = m
-print(f"로드된 모터: {list(motors.keys())}")
+    try:
+        m = robot.getDevice(name)
+        if name in GRIPPER_NAMES:
+            m.setPosition(float('inf'))  # velocity mode
+            m.setVelocity(0.0)
+        else:
+            m.setVelocity(1.0)
+        motors[name] = m
+    except Exception as e:
+        print(f"⚠️ 모터 {name} 초기화 실패: {e}")
 
-# 큐 스레드 시작
+print("✅ 로드된 모터:", list(motors.keys()))
+
+# 명령 스레드 시작
 threading.Thread(target=execute_command_queue, daemon=True).start()
+print("🚀 명령 큐 실행 스레드 시작됨")
+
 
 # =====================================================
-#  메인 루프
+#  Webots RobotWindow (WWI) 인터페이스 루프
 # =====================================================
-
-print("🚀 UR10e LLM 제어 시작")
 
 while robot.step(timestep) != -1:
-    msg = robot.wwiReceiveText()
-    if msg:
-        print("USER_MESSAGE:", msg)
-        result = handle_llm_function_calling(msg)
-        reply = f"결과: {result}\n큐 크기: {command_queue.qsize()}"
-        robot.wwiSendText(reply)
+    message = robot.wwiReceiveText()
+    if message:
+        print(f"📩 USER: {message}")
+        result = handle_llm_command(message)
+        print("🧠 처리 결과:", result)
+        robot.wwiSendText(f"<b>{message}</b><br>{result}")
