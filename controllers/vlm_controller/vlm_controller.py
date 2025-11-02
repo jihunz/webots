@@ -7,12 +7,14 @@ import json
 import threading
 import time
 from queue import Queue
+from datetime import datetime, timezone
 
 # ============================================
 # 설정
 # ============================================
 dotenv.load_dotenv()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+LOG_PATH = os.getenv("PLAN_LOG_PATH", "ur10e_run_logs.jsonl")
 
 # ============================================
 # 공통 유틸
@@ -33,6 +35,14 @@ def step_for(robot: Robot, timestep: int, duration_sec: float):
     while time.time() < end:
         if robot.step(timestep) == -1:
             break
+
+def log_event(kind: str, data: dict):
+    try:
+        entry = {"t": datetime.now(timezone.utc).isoformat(), "kind": kind, **(data or {})}
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 # ============================================
 # 로봇 초기화
@@ -93,6 +103,18 @@ def move_joints(targets, speed=1.0, duration=3.0):
         print("⚠️ move_joints(): invalid targets type:", type(targets))
         return
 
+    # 조인트 한계 보정
+    def clamp(name: str, angle: float) -> float:
+        m = motors.get(name)
+        try:
+            mn = m.getMinPosition(); mx = m.getMaxPosition()
+            if mn is not None and mx is not None and mx >= mn:
+                if angle < mn: return mn
+                if angle > mx: return mx
+        except Exception:
+            pass
+        return angle
+
     # 적용
     for name, angle in targets.items():
         m = motors.get(name)
@@ -101,12 +123,16 @@ def move_joints(targets, speed=1.0, duration=3.0):
             continue
         try:
             m.setVelocity(abs(speed))
-            m.setPosition(float(angle))
+            a = clamp(name, float(angle))
+            if a != angle:
+                print(f"ℹ️ clamp {name}: {angle}→{a}")
+            m.setPosition(a)
         except Exception as e:
             print(f"⚠️ setPosition failed for {name}: {e}")
 
     step_for(robot, timestep, duration)
     print(f"🦾 Joints moved → {targets}")
+    log_event("exec_move_arm", {"targets": targets, "speed": speed, "duration": duration})
 
 def open_gripper(speed=0.5, duration=2.0):
     for name in GRIPPER_NAMES:
@@ -118,6 +144,7 @@ def open_gripper(speed=0.5, duration=2.0):
         m = motors.get(name)
         if m: m.setVelocity(0.0)
     print("✅ Gripper opened")
+    log_event("exec_gripper", {"action": "open", "speed": speed, "duration": duration})
 
 def close_gripper(speed=0.5, duration=2.0):
     for name in GRIPPER_NAMES:
@@ -128,6 +155,7 @@ def close_gripper(speed=0.5, duration=2.0):
         m = motors.get(name)
         if m: m.setVelocity(0.0)
     print("✅ Gripper closed")
+    log_event("exec_gripper", {"action": "close", "speed": speed, "duration": duration})
 
 # ============================================
 # 명령 큐 실행 스레드
@@ -144,17 +172,19 @@ def exec_queue_loop():
             try:
                 kind = cmd.get("type")
                 if kind == "move_joints":
-                    move_joints(cmd.get("targets", {}), cmd.get("speed", 1.0), cmd.get("duration", 3.0))
+                    move_joints(cmd.get("targets", {}), cmd.get("speed", 1.0), cmd.get("duration", 0.5))
                 elif kind == "open_gripper":
-                    open_gripper(cmd.get("speed", 0.5), cmd.get("duration", 2.0))
+                    open_gripper(cmd.get("speed", 0.5), cmd.get("duration", 0.5))
                 elif kind == "close_gripper":
-                    close_gripper(cmd.get("speed", 0.5), cmd.get("duration", 2.0))
+                    close_gripper(cmd.get("speed", 0.5), cmd.get("duration", 0.5))
                 elif kind == "wait":
                     step_for(robot, timestep, float(cmd.get("seconds", 1.0)))
                 else:
                     print(f"❓ Unknown command type: {kind}")
+                log_event("exec_step", {"cmd": cmd})
             except Exception as e:
                 print("❌ Command exec error:", e)
+                log_event("exec_error", {"cmd": cmd, "error": str(e)})
             finally:
                 command_queue.task_done()
                 is_executing = False
@@ -202,44 +232,76 @@ def preset_from_utterance(text: str):
         return POSE_PRESETS["left"]
     return None
 
-# ============================================
-# 계획 생성 (자연어 → JSON plan)
-# ============================================
+############################################
+# 계획 생성 (Responses/Completions tools)
+############################################
 PLAN_SYSTEM = (
-    "너는 UR10e 로봇팔 작업 계획자이자 실행 컨트롤러다.\n"
-    "사용자의 한국어/영어 명령을 단계별 계획(JSON 배열)으로 반환하라.\n"
-    "반드시 JSON 배열만 출력하고, 설명/텍스트를 추가하지 마라.\n"
-    "각 단계는 다음 중 하나의 action을 가진다: "
-    "'move_arm', 'control_gripper', 'wait'.\n"
-    "각 단계는 반드시 'action'과 'params'를 포함한다.\n"
-    "스키마 예시:\n"
-    "[\n"
-    "  {\"action\": \"move_arm\", \"params\": {\"targets\": {\"shoulder_lift_joint\": -1.0, \"elbow_joint\": 1.5}, \"speed\": 1.0, \"duration\": 2.5}},\n"
-    "  {\"action\": \"control_gripper\", \"params\": {\"action\": \"close\", \"speed\": 0.5, \"duration\": 1.0}},\n"
-    "  {\"action\": \"wait\", \"params\": {\"seconds\": 0.5}}\n"
-    "]\n"
-    "주의:\n"
-    "- move_arm.targets는 dict 또는 [{'joint':..., 'angle':...}] 리스트 형태 모두 가능.\n"
-    "- control_gripper.action은 'open' 또는 'close'.\n"
-    "- 각 단계의 duration/seconds가 없으면 기본값을 생략 가능.\n"
+    "너는 UR10e 로봇팔 작업 계획자다. 반드시 함수 호출 produce_plan 을 사용하고,\n"
+    "parameters.steps 배열 안에 단계들을 넣어라.\n"
+    "각 단계는 {action, params}. action∈{move_arm, control_gripper, wait}.\n"
+    "params.targets는 dict 또는 [{'joint','angle'}] 리스트 허용.\n"
+    "control_gripper.params.action ∈ {'open','close'}."
 )
 
-def plan_from_text(user_message: str):
-    """
-    자연어 → JSON 계획 배열
-    실패 시 빈 리스트 반환
-    """
-    # 간단한 의도에 대해선 로컬 프리셋으로 빠르게 반환
-    preset = None
-    if any(k in user_message for k in ["팔", "arm"]):
-        preset = preset_from_utterance(user_message)
-    if "그리퍼" in user_message or "gripper" in user_message:
-        # 프리셋 + 그리퍼 결합 지시가 아니면 LLM 사용
-        pass
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "produce_plan",
+            "description": "사용자 명령을 실행 가능한 단계 배열로 변환",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "action": {"type": "string", "enum": ["move_arm", "control_gripper", "wait"]},
+                                "params": {
+                                    "type": "object",
+                                    "properties": {
+                                        "targets": {
+                                            "oneOf": [
+                                                {
+                                                    "type": "object",
+                                                    "description": "조인트 이름별 각도 매핑 예시: {'shoulder_lift_joint': -1.0, 'elbow_joint': 1.5}"
+                                                },
+                                                {
+                                                    "type": "array",
+                                                    "description": "조인트 리스트 예시: [{'joint': 'shoulder_lift_joint', 'angle': -1.0}]",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "joint": {"type": "string"},
+                                                            "angle": {"type": "number"}
+                                                        },
+                                                        "required": ["joint", "angle"]
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "speed": {"type": "number"},
+                                        "duration": {"type": "number"},
+                                        "seconds": {"type": "number"},
+                                        "action": {"type": "string", "enum": ["open", "close"]}
+                                    }
+                                }
+                            },
+                            "required": ["action", "params"]
+                        }
+                    }
+                },
+                "required": ["steps"]
+            }
+        }
+    }]
 
+def plan_from_text(user_message: str):
+    # 간단 의도 프리셋
+    preset = preset_from_utterance(user_message)
     try:
         if client is None:
-            # OpenAI 사용 불가 시, 프리셋만으로 대체
             if preset:
                 return [{"action": "move_arm", "params": {"targets": preset}}]
             return []
@@ -248,20 +310,31 @@ def plan_from_text(user_message: str):
             {"role": "system", "content": PLAN_SYSTEM},
             {"role": "user", "content": user_message},
         ]
+        # Chat Completions + tools (required)
         resp = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
+            tools=TOOLS,
+            tool_choice="required",
             temperature=0.2,
             max_completion_tokens=400,
         )
-        content = resp.choices[0].message.content
-        content = strip_code_fences(content)
-        plan = json.loads(content)
-        if isinstance(plan, list):
-            return plan
+        msg = resp.choices[0].message
+        tc = getattr(msg, "tool_calls", None)
+        if tc and len(tc) > 0:
+            args = tc[0].function.arguments
+            try:
+                obj = json.loads(strip_code_fences(args)) if isinstance(args, str) else args
+                if isinstance(obj, dict) and isinstance(obj.get("steps"), list):
+                    return obj["steps"]
+            except Exception as e:
+                print("⚠️ tool args parse fail:", e)
+        # 실패 시 프리셋
+        if preset:
+            return [{"action": "move_arm", "params": {"targets": preset}}]
         return []
     except Exception as e:
-        print("⚠️ plan_from_text() failed, fallback:", e)
+        print("⚠️ plan_from_text() tools failed:", e)
         if preset:
             return [{"action": "move_arm", "params": {"targets": preset}}]
         return []
@@ -288,7 +361,7 @@ def enqueue_plan(plan: list):
                 "type": "move_joints",
                 "targets": raw_targets if raw_targets else POSE_PRESETS["lift"],
                 "speed": params.get("speed", 1.0),
-                "duration": params.get("duration", 3.0),
+                "duration": params.get("duration", 0.5),
             })
             added += 1
 
@@ -298,7 +371,7 @@ def enqueue_plan(plan: list):
             command_queue.put({
                 "type": typ,
                 "speed": params.get("speed", 0.5),
-                "duration": params.get("duration", 2.0),
+                "duration": params.get("duration", 0.5),
             })
             added += 1
 
@@ -310,6 +383,7 @@ def enqueue_plan(plan: list):
         else:
             print("❓ Unknown plan action:", action)
 
+    log_event("plan_enqueued", {"steps": plan, "added": added})
     return added
 
 # ============================================
@@ -324,15 +398,18 @@ def handle_nl_command(text: str) -> str:
         return "⚠️ 빈 명령입니다."
 
     # 특수: 아주 단순 지시(그리퍼 열/닫) 빠른 경로
-    if text in ("그리퍼 열어", "그리퍼 열기", "open gripper"):
+    if text in ("그리퍼 열어", "그리퍼 열기", "open gripper", "gripper open"):
         command_queue.put({"type": "open_gripper"})
+        log_event("nl_shortcut", {"text": text, "action": "open_gripper"})
         return "✅ 즉시: 그리퍼 열기"
-    if text in ("그리퍼 닫아", "그리퍼 닫기", "close gripper"):
+    if text in ("그리퍼 닫아", "그리퍼 닫기", "close gripper", "gripper close"):
         command_queue.put({"type": "close_gripper"})
+        log_event("nl_shortcut", {"text": text, "action": "close_gripper"})
         return "✅ 즉시: 그리퍼 닫기"
 
     # 계획 생성
     plan = plan_from_text(text)
+    log_event("plan_generated", {"text": text, "plan": plan})
     if not plan:
         # 마지막 보루: 프리셋 포즈
         preset = preset_from_utterance(text)
@@ -352,5 +429,7 @@ while robot.step(timestep) != -1:
     msg = robot.wwiReceiveText()
     if msg:
         print(f"📩 USER: {msg}")
+        log_event("nl_received", {"text": msg})
         result = handle_nl_command(msg)
         robot.wwiSendText(result)
+        log_event("nl_replied", {"reply": result})
