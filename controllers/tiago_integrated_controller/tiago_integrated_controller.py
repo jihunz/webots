@@ -203,9 +203,33 @@ class TiagoRobotInterface:
         if self.head_tilt: self.head_tilt.setPosition(tilt)
         return "Head moved"
 
+    def get_current_ee_position(self):
+        """Get current end-effector position using Forward Kinematics"""
+        if not self.model or self.ee_frame_id == -1:
+            return None
+        
+        # Get current joint angles
+        q = pin.neutral(self.model)
+        for name, sensor in zip([m.getName() for m in self.arm_joints], self.arm_sensors):
+            if sensor and self.model.existJointName(name):
+                idx = self.model.getJointId(name)
+                idx_q = self.model.joints[idx].idx_q
+                q[idx_q] = sensor.getValue()
+        
+        # Compute FK
+        pin.forwardKinematics(self.model, self.data, q)
+        pin.updateFramePlacements(self.model, self.data)
+        pos = self.data.oMf[self.ee_frame_id].translation
+        return pos.copy()
+
     def execute_move_arm(self, target_pos):
-        print(f"🦾 H/W: Moving arm towards {target_pos}")
+        print(f"🦾 IK Target: {target_pos}")
         if not self.model or not self.arm_joints: return "IK Error"
+        
+        # Print current EE position for debugging
+        curr_pos = self.get_current_ee_position()
+        if curr_pos is not None:
+            print(f"   Current EE position: [{curr_pos[0]:.3f}, {curr_pos[1]:.3f}, {curr_pos[2]:.3f}]")
         
         guesses = []
         q_neutral = pin.neutral(self.model)
@@ -222,37 +246,44 @@ class TiagoRobotInterface:
         for _ in range(5):
             guesses.append(pin.randomConfiguration(self.model))
 
-        eps = 1e-2; IT_MAX = 500; DT = 1e-1; damp = 1e-3
+        eps = 5e-2; IT_MAX = 500; DT = 1e-1; damp = 1e-2
         best_q = None
+        best_err = float('inf')
         
         for q_start in guesses:
             q = q_start.copy()
-            success = False
             for i in range(IT_MAX):
                 pin.forwardKinematics(self.model, self.data, q)
                 pin.updateFramePlacements(self.model, self.data)
                 curr = self.data.oMf[self.ee_frame_id].translation
                 err = curr - np.array(target_pos)
-                if np.linalg.norm(err) < eps:
-                    success = True
+                err_norm = np.linalg.norm(err)
+                
+                if err_norm < eps:
+                    best_q = q.copy()
+                    print(f"✅ IK Converged! Error={err_norm:.4f}")
                     break
+                if err_norm < best_err:
+                    best_err = err_norm
+                    best_q = q.copy()
+                    
                 J = pin.computeFrameJacobian(self.model, self.data, q, self.ee_frame_id)[:3, :]
                 v = - J.T.dot(np.linalg.solve(J.dot(J.T) + damp * np.eye(3), err))
                 q = pin.integrate(self.model, q, v * DT)
-            if success:
-                best_q = q
-                print("✅ IK Converged")
-                break
             
+            if best_err < eps:
+                break
+        
         if best_q is not None:
+            print(f"   Best error achieved: {best_err:.4f}")
             for name, motor in zip([m.getName() for m in self.arm_joints], self.arm_joints):
                 if self.model.existJointName(name):
                     idx = self.model.getJointId(name)
                     idx_q = self.model.joints[idx].idx_q
                     motor.setPosition(best_q[idx_q])
-            return "Moved arm (IK Success)"
+            return "Moved arm (IK)"
         
-        print("❌ Pinocchio IK Failed (All attempts)")
+        print("❌ Pinocchio IK Failed")
         return "IK Failed"
 
     def execute_gripper(self, open_state):
@@ -345,13 +376,21 @@ class LookAroundTool(BaseTool):
                     if 0 <= cx < w and 0 <= cy < h:
                         d = depth[cy * w + cx]
                         if 0.1 < d < 5.0:
-                            x_base = d
-                            y_base = -(cx - w/2) * 0.002
-                            z_base = 0.8
-                            print(f"      ✅ FOUND {mapped} at depth={d:.2f}m")
-                            # Return JSON with position for immediate use
+                            # Calculate 3D position in robot frame
+                            # Camera FOV is approximately 60 degrees horizontal
+                            fov_h = 1.0  # radians (~57 degrees)
+                            pixel_angle = (cx - w/2) / w * fov_h
+                            
+                            # x = forward distance (depth * cos(pixel_angle))
+                            # y = lateral offset (depth * sin(pixel_angle)), negative = right
+                            x_arm = d * np.cos(pixel_angle)
+                            y_arm = -d * np.sin(pixel_angle)  # Negative because right is negative Y
+                            z_arm = 0.78  # Table height (can is on table)
+                            
+                            print(f"      ✅ FOUND {mapped} at depth={d:.2f}m, pos=({x_arm:.2f},{y_arm:.2f},{z_arm:.2f})")
+                            
                             if mapped == "red can" and not found_target:
-                                found_target = {"object": mapped, "position": [x_base, y_base, z_base], "distance": d}
+                                found_target = {"object": mapped, "position": [x_arm, y_arm, z_arm], "distance": d}
         
         if found_target:
             return json.dumps({
@@ -431,16 +470,19 @@ class DetectObjectTool(BaseTool):
                         if d < 0.1 or d > 5.0: 
                             continue
                         
-                        print(f"✅ MATCH! '{cls_name}' -> '{mapped_name}' at ({cx}, {cy}), Depth={d:.3f}m")
+                        # Calculate 3D position in robot frame
+                        fov_h = 1.0  # radians (~57 degrees)
+                        pixel_angle = (cx - w/2) / w * fov_h
+                        x_arm = d * np.cos(pixel_angle)
+                        y_arm = -d * np.sin(pixel_angle)
+                        z_arm = 0.78
                         
-                        x_base = d
-                        y_base = -(cx - w/2) * 0.002
-                        z_base = 0.8 
+                        print(f"✅ MATCH! '{cls_name}' -> '{mapped_name}' at pixel({cx},{cy}), depth={d:.2f}m, pos=({x_arm:.2f},{y_arm:.2f},{z_arm:.2f})")
                         
                         return json.dumps({
                             "status": "found", 
                             "object": mapped_name,
-                            "position": [float(x_base), float(y_base), float(z_base)],
+                            "position": [float(x_arm), float(y_arm), float(z_arm)],
                             "distance": float(d)
                         })
         
@@ -464,21 +506,68 @@ class MoveBaseTool(BaseTool):
         return f"Base moved {distance:.2f}m forward. Use look_around to check new position."
 
 class MoveArmInput(BaseModel):
-    action: str = Field(..., description="'reach_forward' to extend arm forward for grabbing, 'home' to retract arm")
+    x: float = Field(..., description="X: forward distance from robot (usually 0.4-0.7)")
+    y: float = Field(..., description="Y: left/right offset (negative=right, usually -0.3 to 0.3)")
+    z: float = Field(..., description="Z: height (table ~0.75-0.85)")
 
 class MoveArmTool(BaseTool):
     name: str = "move_arm"
-    description: str = "Controls arm. Use 'reach_forward' when close to object (<0.5m), then use gripper."
+    description: str = "Moves arm to (x,y,z) using Pinocchio IK. After look_around, use the position values but adjust x to be closer (e.g., if distance=0.5, use x=0.45)."
     args_schema: Type[BaseModel] = MoveArmInput
+    def _run(self, x: float, y: float, z: float) -> str:
+        import time
+        
+        # Transform camera coordinates to arm workspace (URDF) coordinates
+        # TIAGo++ right arm base is offset from robot center
+        # 
+        # Camera reports:
+        #   x = depth (forward from camera)
+        #   y = lateral offset (negative = object is to the right)
+        #   z = height (usually fixed at 0.8)
+        #
+        # Arm workspace in URDF:
+        #   X axis: forward
+        #   Y axis: left (right arm is at Y ~ -0.2 from center)
+        #   Z axis: up
+        
+        # Right arm base is ~0.2m to the right of robot center
+        # Camera is ~0.1m in front of robot center
+        # Arm reach is ~0.5-0.7m from shoulder
+        
+        # Clamp to reachable workspace
+        x_clamped = max(0.3, min(0.7, x))  # Forward reach limit
+        y_clamped = max(-0.4, min(0.2, y)) # Right arm can reach right side better
+        z_clamped = max(0.6, min(1.0, z))  # Height range
+        
+        # Convert to URDF coordinates for right arm
+        # The arm shoulder is at approximately (0.1, -0.2, 1.0) in base_link frame
+        urdf_x = x_clamped
+        urdf_y = y_clamped - 0.1  # Slight offset for right arm
+        urdf_z = z_clamped
+        
+        print(f"🎯 IK Target: Input({x:.2f},{y:.2f},{z:.2f}) -> URDF({urdf_x:.2f},{urdf_y:.2f},{urdf_z:.2f})", flush=True)
+        
+        action_queue.put({"type": "arm_ik", "pos": [urdf_x, urdf_y, urdf_z]})
+        time.sleep(4.0)  # Wait for IK computation and arm movement
+        return f"Arm moved towards ({urdf_x:.2f}, {urdf_y:.2f}, {urdf_z:.2f}). Use control_gripper to grab."
+
+
+class MoveArmPresetInput(BaseModel):
+    action: str = Field(..., description="'reach' or 'home'")
+
+class MoveArmPresetTool(BaseTool):
+    name: str = "arm_preset"
+    description: str = "Preset arm positions: 'reach' (extend forward) or 'home' (retract)."
+    args_schema: Type[BaseModel] = MoveArmPresetInput
     def _run(self, action: str) -> str:
-        if action.lower() == "reach_forward":
+        if action.lower() == "reach":
             action_queue.put({"type": "arm_preset", "preset": "reach"})
             return "Arm reaching forward. Now use control_gripper to grab."
         elif action.lower() == "home":
             action_queue.put({"type": "arm_preset", "preset": "home"})
             return "Arm retracted to home position."
         else:
-            return f"Unknown action '{action}'. Use 'reach_forward' or 'home'."
+            return f"Unknown action '{action}'. Use 'reach' or 'home'."
 
 class GripperInput(BaseModel):
     action: str = Field(..., description="'open' or 'close'")
@@ -499,15 +588,16 @@ def run_crew_ai():
     engineer = Agent(
         role='Robotics Engineer',
         goal='Manipulate objects robustly',
-        backstory="""Expert robot controller. Follow this EXACT sequence:
-        1. Use 'look_around' with tilt=-0.5 to find red can.
-        2. Move base forward 0.5m using move_base.
-        3. Use look_around again. If still far, move_base forward 0.3m.
-        4. After 2-3 base moves, use 'move_arm' with action='reach_forward'.
-        5. Use 'control_gripper' with action='close' to grab.
-        6. Use 'move_arm' with action='home' to lift.
-        7. Turn with move_base(angle=1.57) to find table, place object with gripper open.""",
-        tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), GripperTool(), LookAroundTool()],
+        backstory="""Expert robot controller. Follow this sequence:
+        1. Use look_around(tilt=-0.5) to find red can. Note the position [x,y,z] and distance.
+        2. If distance > 0.55m: use move_base(distance=distance-0.45) to approach.
+        3. Use look_around again. Repeat step 2 if still far.
+        4. When distance < 0.55m: call move_arm with x,y,z from the look_around result.
+           Example: position=[0.48,-0.05,0.78] → move_arm(x=0.48, y=-0.05, z=0.78)
+        5. control_gripper(action='close') to grab.
+        6. arm_preset(action='home') to lift.
+        7. move_base(angle=1.57) to turn, then control_gripper(action='open').""",
+        tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), MoveArmPresetTool(), GripperTool(), LookAroundTool()],
         llm=llm,
         verbose=True
     )
@@ -556,9 +646,9 @@ def main():
                 print(f"👀 Head Moving: Pan={cmd['pan']}, Tilt={cmd['tilt']}")
                 for _ in range(50): supervisor.step(robot_interface.timestep); robot_interface.update_sensors()
                 
-            elif cmd['type'] == 'arm':
+            elif cmd['type'] == 'arm_ik':
                 robot_interface.execute_move_arm(cmd['pos'])
-                for _ in range(100): supervisor.step(robot_interface.timestep)
+                for _ in range(200): supervisor.step(robot_interface.timestep); robot_interface.update_sensors()
             
             elif cmd['type'] == 'arm_preset':
                 preset = cmd['preset']
