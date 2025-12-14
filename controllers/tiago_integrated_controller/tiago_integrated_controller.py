@@ -33,12 +33,11 @@ except ImportError as e:
 if load_dotenv: load_dotenv()
 
 OPENAI_MODEL = "gpt-4o"
-YOLO_MODEL = "yolov8n.pt"
+YOLO_MODEL = "yolov8m.pt" # Use Medium
 URDF_FILENAME = "tiago_generated.urdf"
 
 action_queue = Queue()
 
-# Shared Data for Thread Sync
 sensor_data = {
     "rgb": None,
     "depth": None,
@@ -53,69 +52,47 @@ class TiagoRobotInterface:
         self.timestep = int(self.robot.getBasicTimeStep())
         self.init_devices()
         
-        # 1. Generate URDF dynamically from Webots
         print("📝 Generating URDF from Webots...")
         urdf_content = self.robot.getUrdf()
         with open(URDF_FILENAME, "w") as f:
             f.write(urdf_content)
             
-        # 2. Load Pinocchio Model (Robust Strategy)
         self.model = None
         try:
             if not os.path.exists(URDF_FILENAME) or os.path.getsize(URDF_FILENAME) < 100:
-                raise Exception("URDF file empty or missing")
+                raise Exception("URDF file empty")
 
-            # Attempt 1: pin.buildModelFromUrdf
             if hasattr(pin, 'buildModelFromUrdf'):
-                try:
-                    self.model = pin.buildModelFromUrdf(URDF_FILENAME)
-                    print("✅ Loaded via pin.buildModelFromUrdf")
-                except Exception: pass
-
-            # Attempt 2: pin.urdf.buildModel
+                try: self.model = pin.buildModelFromUrdf(URDF_FILENAME)
+                except: pass
+            
             if self.model is None:
                 try:
                     import pinocchio.urdf
                     self.model = pinocchio.urdf.buildModel(URDF_FILENAME)
-                    print("✅ Loaded via pinocchio.urdf.buildModel")
-                except ImportError: pass
-                except Exception: pass
+                except: pass
 
-            # Attempt 3: RobotWrapper
             if self.model is None:
                 try:
                     from pinocchio.robot_wrapper import RobotWrapper
                     self.model = RobotWrapper.BuildFromURDF(URDF_FILENAME).model
-                    print("✅ Loaded via RobotWrapper")
-                except ImportError: pass
-                except Exception: pass
+                except: pass
 
-            if self.model is None:
-                raise AttributeError("All Pinocchio URDF loaders failed.")
-
-            self.data = self.model.createData()
-            
-            # Find End-Effector Frame
-            self.ee_frame_id = -1
-            candidates = ["arm_right_tool_link", "arm_right_7_link", "gripper_right_link"]
-            for c in candidates:
-                if self.model.existFrame(c):
-                    self.ee_frame_id = self.model.getFrameId(c)
-                    print(f"✅ Found EE Frame: {c} (ID: {self.ee_frame_id})")
-                    break
-            
-            if self.ee_frame_id == -1:
-                 # Fallback search
-                 for f in self.model.frames:
-                     if "right" in f.name and ("tool" in f.name or "7" in f.name):
-                         self.ee_frame_id = self.model.getFrameId(f.name)
-                         print(f"⚠️ Guessed EE Frame: {f.name} (ID: {self.ee_frame_id})")
-                         break
-            
-            if self.ee_frame_id != -1:
-                print(f"✅ Pinocchio IK Initialized Successfully")
+            if self.model:
+                self.data = self.model.createData()
+                self.ee_frame_id = -1
+                candidates = ["arm_right_tool_link", "arm_right_7_link", "gripper_right_link"]
+                for c in candidates:
+                    if self.model.existFrame(c):
+                        self.ee_frame_id = self.model.getFrameId(c)
+                        print(f"✅ Found EE Frame: {c} (ID: {self.ee_frame_id})")
+                        break
+                if self.ee_frame_id != -1:
+                    print(f"✅ Pinocchio IK Initialized Successfully")
+                else:
+                    raise Exception("No EE frame")
             else:
-                raise Exception("Could not find End-Effector Frame")
+                raise AttributeError("Pinocchio load failed")
 
         except Exception as e:
             print(f"❌ CRITICAL IK ERROR: {e}")
@@ -147,7 +124,6 @@ class TiagoRobotInterface:
         # 3. Arm (Right)
         self.arm_joints = []
         self.arm_sensors = []
-        
         for i in range(1, 8):
             name = f'arm_right_{i}_joint'
             m = self.robot.getDevice(name)
@@ -160,9 +136,6 @@ class TiagoRobotInterface:
                     self.arm_sensors.append(s)
                 else:
                     self.arm_sensors.append(None)
-        
-        if len(self.arm_joints) != 7:
-            print(f"⚠️ Warning: Found {len(self.arm_joints)} arm joints. IK requires 7.")
 
         # 4. Gripper
         self.gripper = None
@@ -170,7 +143,7 @@ class TiagoRobotInterface:
             m = self.robot.getDevice(name)
             if m: self.gripper = m; break
             
-        # 5. Base (Wheels)
+        # 5. Base
         self.wheels = []
         for name in ['wheel_left_joint', 'wheel_right_joint']:
             m = self.robot.getDevice(name)
@@ -179,7 +152,7 @@ class TiagoRobotInterface:
                 m.setVelocity(0.0)
                 self.wheels.append(m)
 
-        # 6. Head (Crucial)
+        # 6. Head
         self.head_pan = self.robot.getDevice('head_1_joint')
         self.head_tilt = self.robot.getDevice('head_2_joint')
         if self.head_pan: self.head_pan.setVelocity(1.0)
@@ -194,28 +167,21 @@ class TiagoRobotInterface:
         for i, m in enumerate(self.arm_joints):
             if i < len(ready_pose):
                 m.setPosition(ready_pose[i])
+        
+        print("✅ Robot Initialized to Ready Pose")
 
     def update_sensors(self):
-        """Called from Main Thread every step to sync sensor data"""
         if self.camera and self.range_finder:
             raw_img = self.camera.getImage()
             raw_depth = self.range_finder.getRangeImage()
             
             with sensor_data["lock"]:
                 if raw_img:
-                    # Webots returns BGRA string/buffer
-                    # 1. Convert to Numpy (Height, Width, 4)
+                    # Webots returns BGRA
+                    # Convert BGRA -> RGB using numpy slicing [2, 1, 0]
+                    # Also reshape correctly: H, W, 4
                     img_bgra = np.frombuffer(raw_img, np.uint8).reshape((self.camera.getHeight(), self.camera.getWidth(), 4))
-                    
-                    # 2. Extract RGB
-                    # Webots is BGRA. YOLO needs RGB.
-                    # Slice first 3 channels (BGR) -> Reverse Last Axis (RGB)
-                    # img_bgr = img_bgra[:, :, :3]
-                    # img_rgb = img_bgr[:, :, ::-1]
-                    
-                    # One-liner: Take channels 2, 1, 0
-                    sensor_data["rgb"] = img_bgra[:, :, [2, 1, 0]]
-                    
+                    sensor_data["rgb"] = img_bgra[:, :, [2, 1, 0]] 
                     sensor_data["camera_width"] = self.camera.getWidth()
                     sensor_data["camera_height"] = self.camera.getHeight()
                 
@@ -241,7 +207,6 @@ class TiagoRobotInterface:
         print(f"🦾 H/W: Moving arm towards {target_pos}")
         if not self.model or not self.arm_joints: return "IK Error"
         
-        # 1. Prepare Initial Guesses (Random Restart)
         guesses = []
         q_neutral = pin.neutral(self.model)
         guesses.append(q_neutral)
@@ -257,7 +222,6 @@ class TiagoRobotInterface:
         for _ in range(5):
             guesses.append(pin.randomConfiguration(self.model))
 
-        # 2. Pinocchio IK Loop
         eps = 1e-2; IT_MAX = 500; DT = 1e-1; damp = 1e-3
         best_q = None
         
@@ -296,34 +260,6 @@ class TiagoRobotInterface:
             self.gripper.setPosition(0.045 if open_state else 0.0)
         return "Gripper moved"
 
-    def warmup(self):
-        print("⏳ Warmup: Stabilizing sensors...")
-        # 1. Wait for sensors
-        for _ in range(20):
-            self.robot.step(self.timestep)
-            self.update_sensors()
-            
-        print("⏳ Warmup: Moving arm to Ready Pose...")
-        # 2. Check current state (Optional log)
-        # current_q = [s.getValue() for s in self.arm_sensors if s]
-        # print(f"   Current Arm: {current_q}")
-
-        # 3. Apply Ready Pose (Look Down + Arm Tuck)
-        if self.head_tilt: self.head_tilt.setPosition(0.4)
-        if self.head_pan: self.head_pan.setPosition(0.0)
-        
-        ready_pose = [0.2, 0.5, 0.0, 1.0, -1.57, 0.0, 0.0] 
-        for i, m in enumerate(self.arm_joints):
-            if i < len(ready_pose):
-                m.setPosition(ready_pose[i])
-        
-        # 4. Wait for movement
-        for _ in range(50):
-            self.robot.step(self.timestep)
-            self.update_sensors()
-            
-        print("✅ Warmup Complete: Robot Ready")
-
 robot_interface = None 
 
 # --- Tools ---
@@ -335,31 +271,23 @@ class GetRobotStateTool(BaseTool):
 
 class LookAroundInput(BaseModel):
     pan: float = Field(..., description="Head Pan angle (rad). Range: -1.0 to 1.0")
-    tilt: float = Field(..., description="Head Tilt angle (rad). Range: -0.8 (Down) to 0.0 (Front)")
+    tilt: float = Field(..., description="Head Tilt angle (rad). Range: -0.9 to 0.7")
 
 class LookAroundTool(BaseTool):
     name: str = "look_around"
-    description: str = "Moves the robot head to scan. PREFER looking DOWN (negative tilt) to find objects on floor/table."
+    description: str = "Moves head AND runs YOLO. If target found, returns position directly. Use this to find objects."
     args_schema: Type[BaseModel] = LookAroundInput
-
     def _run(self, pan: float, tilt: float) -> str:
-        # Enforce Look Down constraint for better object detection
-        if tilt > 0.1: tilt = 0.0 
+        import time
         
+        # 1. Send head command
         action_queue.put({"type": "head", "pan": pan, "tilt": tilt})
-        return "Head moved. Now call 'detect_object'."
-
-class DetectObjectInput(BaseModel):
-    object_name: str = Field(..., description="Name of the object to find")
-
-class DetectObjectTool(BaseTool):
-    name: str = "detect_object"
-    description: str = "Finds an object using YOLO. If not found, try looking around."
-    args_schema: Type[BaseModel] = DetectObjectInput
-
-    def _run(self, object_name: str) -> str:
-        if not robot_interface: return "Robot not ready"
+        print(f"👀 Moving head to Pan={pan}, Tilt={tilt}...")
         
+        # 2. Wait for head to move + sensor update
+        time.sleep(2.0)
+        
+        # 3. Run YOLO directly here
         rgb = None
         depth = None
         w = 0
@@ -368,38 +296,136 @@ class DetectObjectTool(BaseTool):
         with sensor_data["lock"]:
             if sensor_data["rgb"] is not None:
                 rgb = sensor_data["rgb"].copy()
-                depth = list(sensor_data["depth"]) if sensor_data["depth"] else None
+                if sensor_data["depth"]:
+                    depth = list(sensor_data["depth"])
                 w = sensor_data["camera_width"]
                 h = sensor_data["camera_height"]
         
         if rgb is None:
-            return json.dumps({"status": "error", "msg": "No camera data"})
+            return f"Head at Pan={pan}, Tilt={tilt}. ERROR: No image!"
         
-        # Restore confidence to 0.2
-        results = robot_interface.yolo(rgb, verbose=False, conf=0.2)
+        # Run YOLO
+        results = robot_interface.yolo(rgb, verbose=False, conf=0.6)
+        num_boxes = len(results[0].boxes) if results else 0
+        print(f"   🔍 YOLO detected {num_boxes} objects")
         
-        detected_names = []
+        detected = []
+        alias_map = {
+            "traffic light": "red can", 
+            "bench": "table",
+            "dining table": "table",
+            "cell phone": "red can",
+            "bottle": "red can",
+            "cup": "red can",
+            "vase": "red can",
+            "wine glass": "red can"
+        }
+        
+        found_target = None
         
         for r in results:
             for box in r.boxes:
                 cls_id = int(box.cls[0])
                 cls_name = robot_interface.yolo.names[cls_id]
                 conf = float(box.conf[0])
-                detected_names.append(f"{cls_name}({conf:.2f})")
-                print(f"👁️ YOLO Saw: {cls_name} ({conf:.2f})")
+                mapped = alias_map.get(cls_name.lower(), cls_name.lower())
+                detected.append(f"{cls_name}->{mapped}")
+                print(f"      👁️ {cls_name} ({conf:.2f}) -> {mapped}")
                 
-                alias_map = {"traffic light": "red can", "bench": "table"}
+                # If we found red can or table, compute position immediately
+                if mapped in ["red can", "table"] and depth:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    cx, cy = int((x1+x2)/2), int((y1+y2)/2)
+                    if 0 <= cx < w and 0 <= cy < h:
+                        d = depth[cy * w + cx]
+                        if 0.1 < d < 5.0:
+                            x_base = d
+                            y_base = -(cx - w/2) * 0.002
+                            z_base = 0.8
+                            print(f"      ✅ FOUND {mapped} at depth={d:.2f}m")
+                            # Return JSON with position for immediate use
+                            if mapped == "red can" and not found_target:
+                                found_target = {"object": mapped, "position": [x_base, y_base, z_base], "distance": d}
+        
+        if found_target:
+            return json.dumps({
+                "status": "found",
+                "object": found_target["object"],
+                "position": found_target["position"],
+                "distance": found_target["distance"],
+                "msg": f"Target found! Distance={found_target['distance']:.2f}m. Use move_arm or move_base."
+            })
+        elif detected:
+            return f"Head at Pan={pan}, Tilt={tilt}. SAW: {detected}. No target (red can) found. Try different angles."
+        else:
+            return f"Head at Pan={pan}, Tilt={tilt}. Nothing detected. Try different angles (pan: -1 to 1, tilt: -0.9 to 0.7)."
+
+class DetectObjectInput(BaseModel):
+    object_name: str = Field(..., description="Name of the object to find")
+
+class DetectObjectTool(BaseTool):
+    name: str = "detect_object"
+    description: str = "Finds an object using YOLO."
+    args_schema: Type[BaseModel] = DetectObjectInput
+
+    def _run(self, object_name: str) -> str:
+        if not robot_interface: return "Robot not ready"
+        
+        print(f"📷 Vision: Scanning for '{object_name}'...")
+        
+        # Get current sensor data (single frame - fast!)
+        rgb = None
+        depth = None
+        w = 0
+        h = 0
+        
+        with sensor_data["lock"]:
+            if sensor_data["rgb"] is not None:
+                rgb = sensor_data["rgb"].copy()
+                if sensor_data["depth"]:
+                    depth = list(sensor_data["depth"])
+                w = sensor_data["camera_width"]
+                h = sensor_data["camera_height"]
+        
+        if rgb is None:
+            return json.dumps({"status": "not_found", "msg": "No image available"})
+        
+        # Run YOLO (single inference - fast!)
+        results = robot_interface.yolo(rgb, verbose=False, conf=0.6)
+        num_boxes = len(results[0].boxes) if results else 0
+        print(f"   🔍 YOLO detected {num_boxes} objects")
+        
+        seen_objects = []
+        alias_map = {
+            "traffic light": "red can", 
+            "bench": "table",
+            "dining table": "table",
+            "cell phone": "red can",
+            "bottle": "red can",
+            "cup": "red can",
+            "vase": "red can",
+            "wine glass": "red can"
+        }
+        
+        for r in results:
+            for box in r.boxes:
+                cls_id = int(box.cls[0])
+                cls_name = robot_interface.yolo.names[cls_id]
+                conf = float(box.conf[0])
                 mapped_name = alias_map.get(cls_name.lower(), cls_name.lower())
+                seen_objects.append(f"{cls_name}->{mapped_name}")
+                print(f"      👁️ {cls_name} ({conf:.2f}) -> {mapped_name}")
                 
                 if object_name.lower() in mapped_name or object_name.lower() in cls_name.lower():
                     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                     cx, cy = int((x1+x2)/2), int((y1+y2)/2)
                     
-                    if depth and 0 <= cx < w:
+                    if depth and 0 <= cx < w and 0 <= cy < h:
                         d = depth[cy * w + cx]
-                        if d < 0.1 or d > 5.0: continue
+                        if d < 0.1 or d > 5.0: 
+                            continue
                         
-                        print(f"✅ Found Target: '{cls_name}' -> '{mapped_name}' at ({cx}, {cy}), Depth={d:.3f}m")
+                        print(f"✅ MATCH! '{cls_name}' -> '{mapped_name}' at ({cx}, {cy}), Depth={d:.3f}m")
                         
                         x_base = d
                         y_base = -(cx - w/2) * 0.002
@@ -412,8 +438,7 @@ class DetectObjectTool(BaseTool):
                             "distance": float(d)
                         })
         
-        print(f"⚠️ Vision: Nothing found. (Detections: {detected_names})")
-        return json.dumps({"status": "not_found", "msg": f"Object not visible. Saw: {detected_names}"})
+        return json.dumps({"status": "not_found", "msg": f"Object not visible. Saw: {seen_objects}"})
 
 class MoveBaseInput(BaseModel):
     distance: float = Field(..., description="Distance (m)")
@@ -458,14 +483,13 @@ def run_crew_ai():
     
     engineer = Agent(
         role='Robotics Engineer',
-        goal='Manipulate objects robustly using mobile manipulation',
+        goal='Manipulate objects robustly',
         backstory="""Expert robot controller.
-        1. Check state.
-        2. Detect object. If NOT found, use 'look_around'.
-        3. AFTER looking around, YOU MUST CALL 'detect_object' AGAIN.
-        4. If found & far, approach.
-        5. If close, pick up.
-        6. Place on table.""",
+        1. Use 'look_around' to scan for objects. It returns position directly if found.
+        2. If distance > 0.7m, use 'move_base' to approach.
+        3. If distance < 0.7m, use 'move_arm' with the position.
+        4. Use 'control_gripper' to pick up.
+        5. Find table and place object on it.""",
         tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), GripperTool(), LookAroundTool()],
         llm=llm,
         verbose=True
@@ -483,9 +507,6 @@ def main():
     global robot_interface
     supervisor = Supervisor()
     robot_interface = TiagoRobotInterface(supervisor)
-    
-    # Warmup removed
-    # robot_interface.warmup()
     
     threading.Thread(target=run_crew_ai, daemon=True).start()
 
@@ -516,10 +537,7 @@ def main():
             elif cmd['type'] == 'head':
                 robot_interface.execute_move_head(cmd['pan'], cmd['tilt'])
                 print(f"👀 Head Moving: Pan={cmd['pan']}, Tilt={cmd['tilt']}")
-                # Wait longer for head to settle
-                for _ in range(50): 
-                    supervisor.step(robot_interface.timestep)
-                    robot_interface.update_sensors()
+                for _ in range(50): supervisor.step(robot_interface.timestep); robot_interface.update_sensors()
                 
             elif cmd['type'] == 'arm':
                 robot_interface.execute_move_arm(cmd['pos'])
