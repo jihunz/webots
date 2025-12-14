@@ -236,11 +236,20 @@ class TiagoRobotInterface:
         guesses.append(q_neutral)
         
         q_curr = q_neutral.copy()
+        joint_read_count = 0
         for name, sensor in zip([m.getName() for m in self.arm_joints], self.arm_sensors):
-            if sensor and self.model.existJointName(name):
-                idx = self.model.getJointId(name)
-                idx_q = self.model.joints[idx].idx_q
-                q_curr[idx_q] = sensor.getValue()
+            if sensor:
+                if self.model.existJointName(name):
+                    idx = self.model.getJointId(name)
+                    idx_q = self.model.joints[idx].idx_q
+                    val = sensor.getValue()
+                    q_curr[idx_q] = val
+                    joint_read_count += 1
+                else:
+                    print(f"   ⚠️ Joint '{name}' not found in URDF model!")
+            else:
+                print(f"   ⚠️ No sensor for joint '{name}'")
+        print(f"   📊 Read {joint_read_count}/{len(self.arm_joints)} joint positions from sensors")
         guesses.append(q_curr)
         
         for _ in range(5):
