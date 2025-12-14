@@ -453,17 +453,21 @@ class MoveBaseTool(BaseTool):
         return "Moving base..."
 
 class MoveArmInput(BaseModel):
-    x: float = Field(..., description="X")
-    y: float = Field(..., description="Y")
-    z: float = Field(..., description="Z")
+    action: str = Field(..., description="'reach_forward' to extend arm forward for grabbing, 'home' to retract arm")
 
 class MoveArmTool(BaseTool):
     name: str = "move_arm"
-    description: str = "Moves arm to (x,y,z)."
+    description: str = "Controls arm. Use 'reach_forward' when close to object (<0.5m), then use gripper."
     args_schema: Type[BaseModel] = MoveArmInput
-    def _run(self, x: float, y: float, z: float) -> str:
-        action_queue.put({"type": "arm", "pos": [x, y, z]})
-        return "Moving arm..."
+    def _run(self, action: str) -> str:
+        if action.lower() == "reach_forward":
+            action_queue.put({"type": "arm_preset", "preset": "reach"})
+            return "Arm reaching forward. Now use control_gripper to grab."
+        elif action.lower() == "home":
+            action_queue.put({"type": "arm_preset", "preset": "home"})
+            return "Arm retracted to home position."
+        else:
+            return f"Unknown action '{action}'. Use 'reach_forward' or 'home'."
 
 class GripperInput(BaseModel):
     action: str = Field(..., description="'open' or 'close'")
@@ -484,12 +488,13 @@ def run_crew_ai():
     engineer = Agent(
         role='Robotics Engineer',
         goal='Manipulate objects robustly',
-        backstory="""Expert robot controller.
-        1. Use 'look_around' to scan for objects. It returns position directly if found.
-        2. If distance > 0.7m, use 'move_base' to approach.
-        3. If distance < 0.7m, use 'move_arm' with the position.
-        4. Use 'control_gripper' to pick up.
-        5. Find table and place object on it.""",
+        backstory="""Expert robot controller. Follow this EXACT sequence:
+        1. Use 'look_around' with tilt=-0.5 to find red can.
+        2. If distance > 0.5m: use 'move_base' to approach (distance - 0.4).
+        3. When distance < 0.5m: use 'move_arm' with action='reach_forward'.
+        4. Then use 'control_gripper' with action='close' to grab.
+        5. Use 'move_arm' with action='home' to lift.
+        6. Turn to find table, place object.""",
         tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), GripperTool(), LookAroundTool()],
         llm=llm,
         verbose=True
@@ -541,7 +546,25 @@ def main():
                 
             elif cmd['type'] == 'arm':
                 robot_interface.execute_move_arm(cmd['pos'])
-                for _ in range(20): supervisor.step(robot_interface.timestep)
+                for _ in range(100): supervisor.step(robot_interface.timestep)
+            
+            elif cmd['type'] == 'arm_preset':
+                preset = cmd['preset']
+                if preset == "reach":
+                    # Predefined joint angles to reach forward (experimentally tuned)
+                    # These angles put the gripper in front of the robot at table height
+                    reach_pose = [0.2, 0.0, -1.5, 1.5, 0.0, 0.5, 0.0]
+                    print("🦾 Arm: Reaching forward...")
+                    for i, motor in enumerate(robot_interface.arm_joints):
+                        if i < len(reach_pose):
+                            motor.setPosition(reach_pose[i])
+                elif preset == "home":
+                    home_pose = [0.2, 0.5, 0.0, 1.0, -1.57, 0.0, 0.0]
+                    print("🦾 Arm: Retracting to home...")
+                    for i, motor in enumerate(robot_interface.arm_joints):
+                        if i < len(home_pose):
+                            motor.setPosition(home_pose[i])
+                for _ in range(150): supervisor.step(robot_interface.timestep)
                 
             elif cmd['type'] == 'gripper':
                 robot_interface.execute_gripper(cmd['open'])
