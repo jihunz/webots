@@ -1,0 +1,39 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/tables/protos/Desk.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/pal_robotics/tiagopp/protos/Tiago++.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/drinks/protos/Can.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation -0.351708319751491 0.0968201864792076 0.9310892058807869 2.6397654437810316
+  position 4.3379192033613725 -2.2261110952296934 4.9013286588689775
+  followType "Pan and Tilt Shot"
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  translation 0.0286442 -0.267723 -2.23496e-14
+  floorSize 5 5
+}
+Desk {
+  translation 0.813052 -0.891708 -8.85067e-15
+}
+Desk {
+  translation 0.763942 0.871168 -5.32189e-14
+  name "desk(1)"
+}
+Tiago++ {
+  translation -0.557505 -0.806152 0.095
+  controller "tiago_integrated_controller"
+}
+Can {
+  translation 0.6 -0.85 0.7710313300104806
+  rotation -0.5166634895242672 0.8559019507538062 0.022151507588346768 1.3513008965889932e-13
+}

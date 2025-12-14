@@ -1,0 +1,224 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/BrushedAluminium.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/FlexibleAluminiumDuct.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/fruits/protos/Apple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/kitchen/breakfast/protos/BiscuitBox.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/drinks/protos/Can.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/animals/protos/Cat.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/universal_robots/protos/UR10e.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/robotiq/protos/Robotiq3fGripper.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/tables/protos/Desk.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/balls/protos/PingPongBall.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation 0.24221938848763458 -0.5979766271566791 -0.7640377747304111 5.090707190842783
+  position -2.5318459578543595 -2.6878514070539334 2.9858948724062184
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  translation -0.179517 -0.12612 -8.29114e-15
+  floorSize 5 5
+}
+PingPongBall {
+  translation 1.01805 -1.05736 0.77
+}
+Desk {
+  translation 0.813052 -0.891708 -8.85067e-15
+}
+DEF robot2 Robot {
+  translation 0.5782289779288488 0.0015384058422248702 0.05908238560031932
+  rotation 0.02569903831984171 0.9753568106115353 -0.21913158472280708 0.2079783302256903
+  children [
+    LED {
+      translation 0 0 0.1
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cone {
+            bottomRadius 0.05
+            height 0.1
+          }
+        }
+      ]
+    }
+    Gyro {
+    }
+    Accelerometer {
+      name "gps"
+    }
+    DistanceSensor {
+      translation 0.07 0 -5.22482e-07
+      rotation 0 -1 0 -5.307179586466759e-06
+      name "DS_0"
+    }
+    DEF LW HingeJoint {
+      jointParameters HingeJointParameters {
+        position 174.92631273571885
+        axis 0 1 0
+        anchor 0 0.1 0
+      }
+      device [
+        RotationalMotor {
+          name "MLW"
+        }
+      ]
+      endPoint Solid {
+        translation -0.00015295479056890636 -0.08000339999999753 0.00010254158801803533
+        rotation -0.790208743832027 0.433475519284035 -0.4332079354684608 4.479849947692654
+        children [
+          DEF LW Shape {
+            appearance FlexibleAluminiumDuct {
+            }
+            geometry Cylinder {
+              height 0.05
+              radius 0.06
+            }
+          }
+        ]
+        boundingObject USE LW
+        physics Physics {
+        }
+      }
+    }
+    DEF RW HingeJoint {
+      jointParameters HingeJointParameters {
+        position 174.92630018011465
+        axis 0 1 0
+        anchor 0 0.1 0
+      }
+      device [
+        RotationalMotor {
+          name "MRW"
+        }
+      ]
+      endPoint Solid {
+        translation -6.6577482752100656e-06 0.07999530000000002 1.5975376213661642e-05
+        rotation -0.7901908110218965 0.43356077473366855 -0.43315532640024024 4.4799164161063745
+        children [
+          DEF RW Shape {
+            appearance FlexibleAluminiumDuct {
+            }
+            geometry Cylinder {
+              height 0.05
+              radius 0.06
+            }
+          }
+        ]
+        boundingObject USE RW
+        physics Physics {
+        }
+      }
+    }
+    DEF body Pose {
+      children [
+        Shape {
+          appearance BrushedAluminium {
+          }
+          geometry Box {
+            size 0.1 0.1 0.1
+          }
+        }
+      ]
+    }
+  ]
+  name "robot2"
+  boundingObject USE body
+  physics Physics {
+  }
+  recognitionColors [
+    0 0 0
+  ]
+  controller "<none>"
+  window "button_input"
+}
+Apple {
+  translation 0.08543338230550421 -1.8939183514637998 0.0497645599999917
+  rotation 0.8902470772205907 0.3674813499222646 -0.2691051819633095 -2.578581989190949
+}
+BiscuitBox {
+  translation -0.1975387404270684 -0.3709416831353511 -0.0001569600000083035
+  rotation 1.1867220156508153e-14 1.7840962314788494e-14 -1 0.0020212078647418616
+}
+UR10e {
+  hidden position_0_0 -2.0319327073336327e-05
+  hidden translation_1 0 0 0.181
+  hidden rotation_1 0 0 -1 2.031932743649929e-05
+  hidden position_1_0 -1.5699558473496475
+  hidden translation_2 0 0.176 0
+  hidden rotation_2 0 0.9999999999999999 0 0.0008401526499470759
+  hidden position_2_0 1.5700440530680935
+  hidden translation_3 0 -0.137 0.613
+  hidden rotation_3 0 1 0 1.5700440530680935
+  hidden position_3_0 -1.5699942856187876
+  hidden translation_4 0 0 0.571
+  hidden rotation_4 0 1 0 0.0008017143809573503
+  hidden position_4_0 -4.3525240991972025e-06
+  hidden translation_5 0 0.135 0
+  hidden rotation_5 0 0 -1 4.352567712536032e-06
+  hidden position_5_0 3.217620788515571e-06
+  hidden translation_6 0 0 0.12
+  hidden rotation_6 0 1 0 3.217684856919116e-06
+  hidden position_7_0 6.389250872652384e-07
+  hidden position_7_1 6.277386558200065e-07
+  hidden position_7_2 0.5292034788059823
+  hidden translation_8 -0.0455 0.0214 0.036
+  hidden rotation_8 0.7068252250589335 0.7073882252412619 3.2258051853275313e-06 3.141598451967976
+  hidden position_8_0 0.5291741921336331
+  hidden translation_9 0.02 0 0
+  hidden rotation_9 0 0 1 0.4796741924869147
+  hidden position_9_0 3.026790550079054e-08
+  hidden translation_10 0.05 -0.028 0
+  hidden rotation_10 0 0 -1 0.5199999697320946
+  hidden position_10_0 -0.05229999999999971
+  hidden translation_11 0.039 0 0
+  hidden translation_12 -0.0455 0.0214 -0.036
+  hidden rotation_12 0.7068252250589695 0.7073882252412439 3.221851758563843e-06 3.1415984440548277
+  hidden position_12_0 0.5291659889213558
+  hidden translation_13 0.02 0 0
+  hidden rotation_13 0 0 1 0.47966599997663983
+  hidden position_13_0 3.039833483186845e-08
+  hidden translation_14 0.05 -0.028 0
+  hidden rotation_14 0 0 -1 0.519999969601664
+  hidden position_14_0 -0.05229999999999957
+  hidden translation_15 0.039 0 0
+  hidden translation_16 0.02 0 0
+  hidden rotation_16 0 0 1 0.4797034633006664
+  hidden position_16_0 1.0180683670194536e-10
+  hidden translation_17 0.05 -0.028 0
+  hidden rotation_17 0 0 -1 0.519999999796385
+  hidden position_17_0 -0.05230000003113854
+  hidden translation_18 0.039 0 0
+  translation -1.56417 0.529448 0.04
+  rotation 4.66309e-07 -7.19235e-09 1 -1.5707953071795862
+  controller "<none>"
+  controllerArgs [
+    ""
+  ]
+  window "ur10e_window"
+  selfCollision FALSE
+  toolSlot [
+    Robotiq3fGripper {
+    }
+    DistanceSensor {
+      translation 0 0.1 0
+      rotation 0 0 1 1.570796
+    }
+  ]
+}
+Can {
+  translation -0.51504 -0.368173 0.06096265999999171
+  rotation 0.0026038541927776277 -0.14963293017159635 -0.9887381888809621 4.69440936226783e-15
+}
+Cat {
+  translation 0.023527 0.315267 0.01
+}
