@@ -280,26 +280,32 @@ class LookAroundTool(BaseTool):
     def _run(self, pan: float, tilt: float) -> str:
         import time
         
-        # 1. Send head command
+        # 1. Send head command + force sensor refresh
         action_queue.put({"type": "head", "pan": pan, "tilt": tilt})
-        print(f"👀 Moving head to Pan={pan}, Tilt={tilt}...")
+        action_queue.put({"type": "refresh"})  # Force Main Thread to refresh sensors
+        print(f"👀 Moving head to Pan={pan}, Tilt={tilt}...", flush=True)
         
         # 2. Wait for head to move + sensor update
-        time.sleep(2.0)
+        time.sleep(2.5)
         
-        # 3. Run YOLO directly here
+        # 3. Run YOLO directly here - read FRESH sensor data
         rgb = None
         depth = None
         w = 0
         h = 0
         
-        with sensor_data["lock"]:
-            if sensor_data["rgb"] is not None:
-                rgb = sensor_data["rgb"].copy()
-                if sensor_data["depth"]:
-                    depth = list(sensor_data["depth"])
-                w = sensor_data["camera_width"]
-                h = sensor_data["camera_height"]
+        # Try multiple times to get fresh data
+        for _ in range(3):
+            time.sleep(0.2)
+            with sensor_data["lock"]:
+                if sensor_data["rgb"] is not None:
+                    rgb = sensor_data["rgb"].copy()
+                    if sensor_data["depth"]:
+                        depth = list(sensor_data["depth"])
+                    w = sensor_data["camera_width"]
+                    h = sensor_data["camera_height"]
+            if rgb is not None:
+                break
         
         if rgb is None:
             return f"Head at Pan={pan}, Tilt={tilt}. ERROR: No image!"
@@ -495,11 +501,12 @@ def run_crew_ai():
         goal='Manipulate objects robustly',
         backstory="""Expert robot controller. Follow this EXACT sequence:
         1. Use 'look_around' with tilt=-0.5 to find red can.
-        2. If distance > 0.5m: use 'move_base' to approach (distance - 0.4).
-        3. When distance < 0.5m: use 'move_arm' with action='reach_forward'.
-        4. Then use 'control_gripper' with action='close' to grab.
-        5. Use 'move_arm' with action='home' to lift.
-        6. Turn to find table, place object.""",
+        2. Move base forward 0.5m using move_base.
+        3. Use look_around again. If still far, move_base forward 0.3m.
+        4. After 2-3 base moves, use 'move_arm' with action='reach_forward'.
+        5. Use 'control_gripper' with action='close' to grab.
+        6. Use 'move_arm' with action='home' to lift.
+        7. Turn with move_base(angle=1.57) to find table, place object with gripper open.""",
         tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), GripperTool(), LookAroundTool()],
         llm=llm,
         verbose=True
@@ -574,6 +581,13 @@ def main():
             elif cmd['type'] == 'gripper':
                 robot_interface.execute_gripper(cmd['open'])
                 for _ in range(10): supervisor.step(robot_interface.timestep)
+            
+            elif cmd['type'] == 'refresh':
+                # Force sensor refresh - run multiple steps to ensure data is fresh
+                print("🔄 Forcing sensor refresh...", flush=True)
+                for _ in range(30): 
+                    supervisor.step(robot_interface.timestep)
+                    robot_interface.update_sensors()
 
 if __name__ == "__main__":
     main()
