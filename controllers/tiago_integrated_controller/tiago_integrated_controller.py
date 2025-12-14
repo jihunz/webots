@@ -446,11 +446,16 @@ class MoveBaseInput(BaseModel):
 
 class MoveBaseTool(BaseTool):
     name: str = "move_base"
-    description: str = "Moves the robot base."
+    description: str = "Moves the robot base forward/backward and rotates."
     args_schema: Type[BaseModel] = MoveBaseInput
     def _run(self, distance: float, angle: float) -> str:
+        import time
         action_queue.put({"type": "base", "lin": distance, "ang": angle})
-        return "Moving base..."
+        # Wait for base to actually move (estimate + buffer)
+        move_time = abs(distance) / 0.5 + abs(angle) / 0.8 + 0.5
+        print(f"🚗 Moving base: distance={distance:.2f}m, angle={angle:.2f}rad (waiting {move_time:.1f}s)")
+        time.sleep(move_time)
+        return f"Base moved {distance:.2f}m forward. Use look_around to check new position."
 
 class MoveArmInput(BaseModel):
     action: str = Field(..., description="'reach_forward' to extend arm forward for grabbing, 'home' to retract arm")
