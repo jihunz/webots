@@ -626,6 +626,13 @@ def run_crew_ai():
 4. EXECUTE: One action at a time
 5. VERIFY: Check result before proceeding
 
+## CRITICAL RULES
+- If you moved base but distance STAYS THE SAME: STOP moving base! 
+  Just try move_arm with adjusted x (subtract 0.3-0.4 from distance).
+- NEVER call move_base more than 2 times total.
+- After 2 move_base attempts, MUST use move_arm regardless of distance.
+- If distance is 0.7-1.0m, you CAN try move_arm with x=0.5 (max reach).
+
 Think carefully. You decide the sequence.""",
         tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), MoveArmPresetTool(), GripperTool(), LookAroundTool()],
         llm=llm,
