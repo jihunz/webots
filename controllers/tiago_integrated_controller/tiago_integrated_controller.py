@@ -310,14 +310,19 @@ class LookAroundTool(BaseTool):
     args_schema: Type[BaseModel] = LookAroundInput
     def _run(self, pan: float, tilt: float) -> str:
         import time
+        import random
         
-        # 1. Send head command + force sensor refresh
+        # 1. Force head movement by adding small random offset, then go to target
+        # This ensures sensors are refreshed even if same pan/tilt is requested
+        offset = random.uniform(-0.05, 0.05)
+        action_queue.put({"type": "head", "pan": pan + offset, "tilt": tilt + offset})
+        time.sleep(0.5)
         action_queue.put({"type": "head", "pan": pan, "tilt": tilt})
-        action_queue.put({"type": "refresh"})  # Force Main Thread to refresh sensors
+        action_queue.put({"type": "refresh"})
         print(f"👀 Moving head to Pan={pan}, Tilt={tilt}...", flush=True)
         
         # 2. Wait for head to move + sensor update
-        time.sleep(2.5)
+        time.sleep(2.0)
         
         # 3. Run YOLO directly here - read FRESH sensor data
         rgb = None
@@ -325,18 +330,14 @@ class LookAroundTool(BaseTool):
         w = 0
         h = 0
         
-        # Try multiple times to get fresh data
-        for _ in range(3):
-            time.sleep(0.2)
-            with sensor_data["lock"]:
-                if sensor_data["rgb"] is not None:
-                    rgb = sensor_data["rgb"].copy()
-                    if sensor_data["depth"]:
-                        depth = list(sensor_data["depth"])
-                    w = sensor_data["camera_width"]
-                    h = sensor_data["camera_height"]
-            if rgb is not None:
-                break
+        # Read sensor data
+        with sensor_data["lock"]:
+            if sensor_data["rgb"] is not None:
+                rgb = sensor_data["rgb"].copy()
+                if sensor_data["depth"]:
+                    depth = list(sensor_data["depth"])
+                w = sensor_data["camera_width"]
+                h = sensor_data["camera_height"]
         
         if rgb is None:
             return f"Head at Pan={pan}, Tilt={tilt}. ERROR: No image!"
@@ -588,15 +589,19 @@ def run_crew_ai():
     engineer = Agent(
         role='Robotics Engineer',
         goal='Manipulate objects robustly',
-        backstory="""Expert robot controller. Follow this sequence:
-        1. Use look_around(tilt=-0.5) to find red can. Note the position [x,y,z] and distance.
-        2. If distance > 0.55m: use move_base(distance=distance-0.45) to approach.
-        3. Use look_around again. Repeat step 2 if still far.
-        4. When distance < 0.55m: call move_arm with x,y,z from the look_around result.
-           Example: position=[0.48,-0.05,0.78] → move_arm(x=0.48, y=-0.05, z=0.78)
-        5. control_gripper(action='close') to grab.
-        6. arm_preset(action='home') to lift.
-        7. move_base(angle=1.57) to turn, then control_gripper(action='open').""",
+        backstory="""Expert robot controller. IMPORTANT: Do NOT repeat move_base more than 2 times!
+        
+        1. look_around(tilt=-0.5) to find red can
+        2. move_base(distance=0.4, angle=0) once
+        3. look_around(tilt=-0.5) again
+        4. IMMEDIATELY use move_arm with the position from look_around:
+           Example: if position=[0.87,-0.05,0.78], use move_arm(x=0.55, y=-0.05, z=0.78)
+           Note: Reduce x by 0.3 from the reported position for arm reach.
+        5. control_gripper(action='close')
+        6. arm_preset(action='home')
+        7. move_base(angle=1.57), then control_gripper(action='open')
+        
+        DO NOT keep calling move_base repeatedly if distance stays same.""",
         tools=[GetRobotStateTool(), DetectObjectTool(), MoveBaseTool(), MoveArmTool(), MoveArmPresetTool(), GripperTool(), LookAroundTool()],
         llm=llm,
         verbose=True
